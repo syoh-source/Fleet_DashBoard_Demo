@@ -22,7 +22,7 @@ if 'settings_unlocked' not in st.session_state:
 # 🚪 2. 로그인 및 회원가입 화면
 # ==========================================
 if not st.session_state['logged_in']:
-    st.title("🚖 자율주행 택시 관제 시스템")
+    st.title("🚖 탑승 현황 대시보드")
     st.markdown("---")
     
     col1, col2, col3 = st.columns([1, 2, 1])
