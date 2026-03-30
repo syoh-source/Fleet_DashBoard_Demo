@@ -88,7 +88,7 @@ st.sidebar.divider()
 def cached_weather(): return fm.get_gangnam_weather()
 weather_info = cached_weather()
 if weather_info:
-    st.markdown("##### 📍 현재 강남구 실시간 날씨 (기상청)")
+    st.markdown("##### 📍 실시간 강남구 날씨 (기상청API)")
     w_col1, w_col2, w_col3, w_col4, w_col5 = st.columns(5)
     with w_col1: st.metric("기온", f"{weather_info.get('T1H', '-')} ℃")
     with w_col2: st.metric("날씨 상태", "비/눈" if weather_info.get('PTY', '0') != '0' else "맑음/흐림")
