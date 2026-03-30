@@ -4,22 +4,27 @@ import altair as alt
 import time
 import datetime
 import pydeck as pdk
-import re # 🌟 이메일 형식 검사를 위한 정규식 라이브러리 추가
+import re 
 import firebase_manager as fm
 
 st.set_page_config(layout="wide", page_title="누적 탑승현황", page_icon="🚖")
 
+# ==========================================
+# 🔐 1. 세션 상태 초기화 (안정적인 방식)
+# ==========================================
 if 'logged_in' not in st.session_state:
-    st.session_state['logged_in'] = False
-    st.session_state['role'] = None
-    st.session_state['name'] = None
+    st.session_state.logged_in = False
+if 'user_role' not in st.session_state:
+    st.session_state.user_role = None
+if 'user_name' not in st.session_state:
+    st.session_state.user_name = None
 if 'settings_unlocked' not in st.session_state:
-    st.session_state['settings_unlocked'] = False
+    st.session_state.settings_unlocked = False
 
 # ==========================================
-# 🚪 1. 로그인 및 회원가입 화면
+# 🚪 2. 로그인 화면 (로그인 전)
 # ==========================================
-if not st.session_state['logged_in']:
+if not st.session_state.logged_in:
     st.title("🚖 탑승 데이터 대시보드")
     st.markdown("---")
     
@@ -28,47 +33,44 @@ if not st.session_state['logged_in']:
         tab_login, tab_signup = st.tabs(["🔑 로그인", "📝 회원가입 (승인 요청)"])
         
         with tab_login:
-            with st.form("login_form"):
-                user_id = st.text_input("아이디 (이메일 주소)")
-                user_pw = st.text_input("비밀번호", type="password")
-                submit_login = st.form_submit_button("로그인 🚀", use_container_width=True)
-                
-                if submit_login:
-                    success, user_data, msg = fm.authenticate_user(user_id, user_pw)
-                    if success:
-                        st.session_state['logged_in'] = True
-                        st.session_state['role'] = user_data['role']
-                        st.session_state['name'] = user_data['name']
-                        st.rerun()
-                    else:
-                        st.error(msg)
+            # 🌟 무한 로딩 방지: form 대신 일반 input 사용 권장 (테스트용)
+            u_id = st.text_input("아이디 (이메일 주소)", key="login_id")
+            u_pw = st.text_input("비밀번호", type="password", key="login_pw")
+            
+            if st.button("로그인 🚀", use_container_width=True):
+                success, user_data, msg = fm.authenticate_user(u_id, u_pw)
+                if success:
+                    st.session_state.logged_in = True
+                    st.session_state.user_role = user_data['role']
+                    st.session_state.user_name = user_data['name']
+                    st.success("로그인 성공! 잠시만 기다려주세요...")
+                    time.sleep(0.5) # 🌟 뇌가 처리할 시간을 줌
+                    st.rerun() # 딱 한 번만 다시 실행
+                else:
+                    st.error(msg)
                         
         with tab_signup:
-            with st.form("signup_form"):
+            with st.form("signup_form", clear_on_submit=True):
                 new_id = st.text_input("희망 아이디 (이메일 주소)")
-                new_pw = st.text_input("비밀번호 (4자리 이상, 숫자/특수문자 포함 가능)", type="password")
+                new_pw = st.text_input("비밀번호 (4자리 이상)", type="password")
                 new_name = st.text_input("이름 (실명)")
                 new_position = st.text_input("직책 / 소속")
-                submit_signup = st.form_submit_button("가입 신청하기 📝", use_container_width=True)
-                
-                if submit_signup:
-                    # 🌟 이메일 형식 검증 패턴
+                if st.form_submit_button("가입 신청하기 📝", use_container_width=True):
                     email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-                    
                     if not new_id or not new_pw or not new_name:
-                        st.warning("아이디, 비밀번호, 이름은 필수 입력입니다.")
+                        st.warning("필수 항목을 입력하세요.")
                     elif not re.match(email_pattern, new_id):
-                        st.warning("⚠️ 아이디는 올바른 이메일 형식이어야 합니다. (예: user@swm.ai)")
+                        st.warning("이메일 형식이 아닙니다.")
                     elif len(new_pw) < 4:
-                        st.warning("⚠️ 비밀번호는 최소 4자리 이상이어야 합니다.")
+                        st.warning("비밀번호가 너무 짧습니다.")
                     else:
                         success, msg = fm.create_user(new_id, new_pw, new_name, new_position)
                         if success: st.success(msg)
                         else: st.error(msg)
-    st.stop()
+    st.stop() # 🛑 로그인 전에는 아래 코드 절대 실행 안 함
 
 # ==========================================
-# 🚀 2. 메인 대시보드
+# 🚀 3. 메인 대시보드 (로그인 후)
 # ==========================================
 st.title("🚖 Ride Count Dashboard")
 
