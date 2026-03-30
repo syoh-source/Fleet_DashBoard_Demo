@@ -1,0 +1,6 @@
+streamlit
+firebase-admin
+pandas
+altair
+requests
+pydeck
