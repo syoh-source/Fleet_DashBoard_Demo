@@ -1,4 +1,0 @@
-streamlit
-firebase-admin
-pandas
-altair
