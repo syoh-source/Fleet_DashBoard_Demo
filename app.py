@@ -65,7 +65,7 @@ if not st.session_state['logged_in']:
 # ==========================================
 # 🚀 3. 메인 대시보드 진입 (로그인 성공 시)
 # ==========================================
-st.title("🚖 Fleet Dashboard (자율주행 택시)")
+st.title("🚖 Fleet Dashboard")
 
 # 사이드바: 유저 정보 및 알림 시스템
 st.sidebar.success(f"👤 **{st.session_state['name']}**님 환영합니다! ({st.session_state['role'].upper()})")
