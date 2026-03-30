@@ -3,7 +3,6 @@ from firebase_admin import credentials, firestore
 import pandas as pd
 import requests
 
-# 🌟 파이어베이스 초기화
 if not firebase_admin._apps:
     cred = credentials.Certificate("firebase_key.json")
     firebase_admin.initialize_app(cred)
@@ -14,25 +13,23 @@ db = firestore.client()
 # 🔐 회원 관리 (Auth) 함수
 # ==========================================
 def create_user(user_id, password, name, position):
-    """신규 회원가입 (기본 승인 대기 상태로 저장)"""
     user_ref = db.collection('users').document(user_id)
     if user_ref.get().exists:
-        return False, "이미 존재하는 아이디입니다."
+        return False, "이미 존재하는 아이디(이메일)입니다."
     
     user_ref.set({
         'password': password,
         'name': name,
         'position': position,
         'role': 'user',
-        'is_approved': False, # 🌟 관리자 승인 전까지는 접속 불가!
+        'is_approved': False,
         'created_at': firestore.SERVER_TIMESTAMP
     })
     return True, "가입 신청 완료! 관리자 승인을 기다려주세요."
 
 def authenticate_user(user_id, password):
-    """로그인 검증"""
-    # 🌟 슈퍼 어드민 (마스터 키 - DB 없이도 무조건 로그인 가능)
-    if user_id == "admin" and password == "1234":
+    # 🌟 최고 관리자 (마스터 키 변경 적용!)
+    if user_id == "syoh@swm.ai" and password == "0105*":
         return True, {'role': 'admin', 'name': '최고관리자', 'is_approved': True}, "성공"
     
     user_ref = db.collection('users').document(user_id).get()
@@ -48,7 +45,6 @@ def authenticate_user(user_id, password):
     return True, user_data, "성공"
 
 def get_all_users():
-    """모든 유저 목록 가져오기 (관리자용)"""
     docs = db.collection('users').stream()
     users = []
     for d in docs:
@@ -58,11 +54,9 @@ def get_all_users():
     return users
 
 def update_user_approval(user_id, is_approved):
-    """유저 승인 상태 변경"""
     db.collection('users').document(user_id).update({'is_approved': is_approved})
 
 def delete_user(user_id):
-    """유저 영구 삭제 (거절)"""
     db.collection('users').document(user_id).delete()
 
 # ==========================================
@@ -98,7 +92,6 @@ def get_master_data():
         return doc_ref, default_data
 
 def update_master_data(cars, drivers):
-    """차량/기사 마스터 데이터 통째로 덮어쓰기 (일괄 저장용)"""
     db.collection('settings').document('master_data').update({'cars': cars, 'drivers': drivers})
 
 def get_ride_logs():
