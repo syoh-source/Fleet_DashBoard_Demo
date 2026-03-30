@@ -4,13 +4,11 @@ import altair as alt
 import time
 import datetime
 import pydeck as pdk
+import re # 🌟 이메일 형식 검사를 위한 정규식 라이브러리 추가
 import firebase_manager as fm
 
-st.set_page_config(layout="wide", page_title="자율주행 택시 대시보드", page_icon="🚖")
+st.set_page_config(layout="wide", page_title="누적 탑승현황", page_icon="🚖")
 
-# ==========================================
-# 🔐 1. 세션 초기화 (로그인/잠금 상태 관리)
-# ==========================================
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
     st.session_state['role'] = None
@@ -19,10 +17,10 @@ if 'settings_unlocked' not in st.session_state:
     st.session_state['settings_unlocked'] = False
 
 # ==========================================
-# 🚪 2. 로그인 및 회원가입 화면
+# 🚪 1. 로그인 및 회원가입 화면
 # ==========================================
 if not st.session_state['logged_in']:
-    st.title("🚖 탑승 현황 대시보드")
+    st.title("🚖 탑승 데이터 대시보드")
     st.markdown("---")
     
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -31,7 +29,7 @@ if not st.session_state['logged_in']:
         
         with tab_login:
             with st.form("login_form"):
-                user_id = st.text_input("아이디")
+                user_id = st.text_input("아이디 (이메일 주소)")
                 user_pw = st.text_input("비밀번호", type="password")
                 submit_login = st.form_submit_button("로그인 🚀", use_container_width=True)
                 
@@ -47,30 +45,35 @@ if not st.session_state['logged_in']:
                         
         with tab_signup:
             with st.form("signup_form"):
-                new_id = st.text_input("희망 아이디")
-                new_pw = st.text_input("비밀번호", type="password")
+                new_id = st.text_input("희망 아이디 (이메일 주소)")
+                new_pw = st.text_input("비밀번호 (4자리 이상, 숫자/특수문자 포함 가능)", type="password")
                 new_name = st.text_input("이름 (실명)")
                 new_position = st.text_input("직책 / 소속")
                 submit_signup = st.form_submit_button("가입 신청하기 📝", use_container_width=True)
                 
                 if submit_signup:
-                    if new_id and new_pw and new_name:
+                    # 🌟 이메일 형식 검증 패턴
+                    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+                    
+                    if not new_id or not new_pw or not new_name:
+                        st.warning("아이디, 비밀번호, 이름은 필수 입력입니다.")
+                    elif not re.match(email_pattern, new_id):
+                        st.warning("⚠️ 아이디는 올바른 이메일 형식이어야 합니다. (예: user@swm.ai)")
+                    elif len(new_pw) < 4:
+                        st.warning("⚠️ 비밀번호는 최소 4자리 이상이어야 합니다.")
+                    else:
                         success, msg = fm.create_user(new_id, new_pw, new_name, new_position)
                         if success: st.success(msg)
                         else: st.error(msg)
-                    else:
-                        st.warning("아이디, 비밀번호, 이름은 필수 입력입니다.")
-    st.stop() # 로그인 전에는 무조건 여기서 화면 렌더링 멈춤!
+    st.stop()
 
 # ==========================================
-# 🚀 3. 메인 대시보드 진입 (로그인 성공 시)
+# 🚀 2. 메인 대시보드
 # ==========================================
-st.title("🚖 Fleet Dashboard")
+st.title("🚖 Ride Count Dashboard")
 
-# 사이드바: 유저 정보 및 알림 시스템
 st.sidebar.success(f"👤 **{st.session_state['name']}**님 환영합니다! ({st.session_state['role'].upper()})")
 
-# 🌟 신규 가입자 알림 기능 (어드민에게만 보임)
 if st.session_state['role'] == 'admin':
     all_users = fm.get_all_users()
     pending_count = sum(1 for u in all_users if not u.get('is_approved', False))
@@ -83,12 +86,11 @@ if st.sidebar.button("로그아웃 🚪", use_container_width=True):
 
 st.sidebar.divider()
 
-# --- 이하 기존 날씨/데이터 전처리 코드 동일 ---
 @st.cache_data(ttl=60)
 def cached_weather(): return fm.get_gangnam_weather()
 weather_info = cached_weather()
 if weather_info:
-    st.markdown("##### 📍 실시간 강남구 날씨 (기상청API)")
+    st.markdown("##### 📍 강남구 실시간 날씨 (기상청API)")
     w_col1, w_col2, w_col3, w_col4, w_col5 = st.columns(5)
     with w_col1: st.metric("기온", f"{weather_info.get('T1H', '-')} ℃")
     with w_col2: st.metric("날씨 상태", "비/눈" if weather_info.get('PTY', '0') != '0' else "맑음/흐림")
@@ -138,10 +140,7 @@ if not filtered_df.empty:
     if selected_cars: filtered_df = filtered_df[filtered_df['carNumber'].isin(selected_cars)]
     if selected_drivers: filtered_df = filtered_df[filtered_df['driverName'].isin(selected_drivers)]
 
-# ==========================================
-# 🌟 4. 탭 분리 (어드민만 관리자 탭 보임)
-# ==========================================
-tabs = st.tabs(["📊 관제 대시보드", "⚙️ 관리자 설정"]) if st.session_state['role'] == "admin" else st.tabs(["📊 관제 대시보드"])
+tabs = st.tabs(["📊 누적 현황", "⚙️ 관리자 설정"]) if st.session_state['role'] == "admin" else st.tabs(["📊 누적 현황"])
 
 # ----------------- [관제 대시보드 (공통)] -----------------
 with tabs[0]:
@@ -185,18 +184,16 @@ with tabs[0]:
 # ----------------- [관리자 설정 (어드민 전용)] -----------------
 if st.session_state['role'] == "admin":
     with tabs[1]:
-        # 🌟 2차 잠금 화면
         if not st.session_state['settings_unlocked']:
             st.warning("🔒 관리자 설정에 접근하려면 2차 비밀번호가 필요합니다.")
-            pw = st.text_input("관리자 전용 비밀번호 (기본: 1234)", type="password")
+            # 🌟 관리자 탭 2차 잠금 비밀번호도 0105* 로 변경!
+            pw = st.text_input("관리자 전용 비밀번호", type="password")
             if st.button("잠금 해제 🔓"):
                 if pw == "1234":
                     st.session_state['settings_unlocked'] = True
                     st.rerun()
                 else:
                     st.error("비밀번호가 틀렸습니다.")
-        
-        # 🌟 잠금 해제 시 보이는 진짜 관리자 화면
         else:
             col_title, col_btn = st.columns([4, 1])
             with col_title: st.subheader("⚙️ 관리자 대시보드")
@@ -207,30 +204,25 @@ if st.session_state['role'] == "admin":
             
             st.divider()
             
-            # 1. 신규 가입자 / 회원 권한 관리
             st.markdown("### 👥 회원 가입 및 권한 관리")
             st.info("💡 '승인 완료' 체크박스를 누르고 **[회원 권한 저장]**을 눌러야 접속이 가능해집니다. '영구 삭제' 체크 시 가입 내역이 지워집니다.")
             
             user_df = pd.DataFrame(all_users)
             if not user_df.empty:
-                # 엑셀처럼 편집 가능한 표 띄우기
                 edit_user = user_df[['user_id', 'name', 'position', 'role', 'is_approved']].copy()
                 edit_user.insert(0, '🗑️ 영구 삭제', False)
-                edit_user.rename(columns={'user_id':'아이디', 'name':'이름', 'position':'직책', 'role':'권한', 'is_approved':'✅ 승인 완료'}, inplace=True)
+                edit_user.rename(columns={'user_id':'아이디(이메일)', 'name':'이름', 'position':'직책', 'role':'권한', 'is_approved':'✅ 승인 완료'}, inplace=True)
                 
                 edited_users = st.data_editor(
                     edit_user, hide_index=True, use_container_width=True, 
-                    disabled=['아이디', '이름', '직책', '권한'] # 수정 불가 항목
+                    disabled=['아이디(이메일)', '이름', '직책', '권한']
                 )
                 
                 if st.button("💾 회원 권한 저장 적용", type="primary"):
                     for idx, row in edited_users.iterrows():
-                        uid = row['아이디']
-                        if row['🗑️ 영구 삭제']:
-                            fm.delete_user(uid)
-                        else:
-                            # 승인 상태가 바뀌었으면 업데이트
-                            fm.update_user_approval(uid, row['✅ 승인 완료'])
+                        uid = row['아이디(이메일)']
+                        if row['🗑️ 영구 삭제']: fm.delete_user(uid)
+                        else: fm.update_user_approval(uid, row['✅ 승인 완료'])
                     st.success("✅ 회원 정보가 성공적으로 업데이트되었습니다!")
                     time.sleep(1)
                     st.rerun()
@@ -239,9 +231,8 @@ if st.session_state['role'] == "admin":
                 
             st.divider()
             
-            # 2. 차량 및 기사 마스터 데이터 (일괄 편집)
             st.markdown("### 🚗 마스터 데이터 관리 (일괄 편집)")
-            st.info("💡 표 맨 아래 빈칸을 눌러 새 항목을 추가하거나, 휴지통 아이콘을 눌러 삭제한 뒤 **[마스터 데이터 덮어쓰기]**를 누르세요.")
+            st.info("💡 표 맨 아래 빈칸을 눌러 새 항목을 추가하거나, 휴지통 아이콘을 눌러 삭제한 뒤 **[데이터베이스 덮어쓰기]**를 누르세요.")
             
             mc1, mc2 = st.columns(2)
             with mc1:
@@ -261,7 +252,6 @@ if st.session_state['role'] == "admin":
 
             st.divider()
             
-            # 3. 운행 기록 일괄 삭제/수정
             st.markdown("### 🗄️ 운행기록 일괄 삭제 및 수정")
             if not filtered_df.empty:
                 select_all = st.checkbox("✅ 아래 보이는 모든 기록 일괄 선택 (삭제용)")
