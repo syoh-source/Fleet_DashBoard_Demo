@@ -74,9 +74,11 @@ if not st.session_state.logged_in:
 # ==========================================
 st.title("🚖 Ride Count Dashboard")
 
-st.sidebar.success(f"👤 **{st.session_state['name']}**님 환영합니다! ({st.session_state['role'].upper()})")
+# 🌟 [수정 포인트] 위에서 저장한 변수 이름(user_name, user_role)과 똑같이 맞춰줍니다!
+st.sidebar.success(f"👤 **{st.session_state.user_name}**님 환영합니다! ({st.session_state.user_role.upper()})")
 
-if st.session_state['role'] == 'admin':
+# 🌟 관리자 권한 체크 부분도 수정
+if st.session_state.user_role == 'admin':
     all_users = fm.get_all_users()
     pending_count = sum(1 for u in all_users if not u.get('is_approved', False))
     if pending_count > 0:
