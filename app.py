@@ -1,4 +1,7 @@
 import os
+os.environ["GRPC_DNS_RESOLVER"] = "native"
+os.environ["GRPC_POLL_STRATEGY"] = "epoll1"  # 🌟 [추가] 파이어베이스 무한 대기 완벽 차단!
+import os
 os.environ["GRPC_DNS_RESOLVER"] = "native"  # 🌟 통신 먹통 방지용 마법의 코드
 import streamlit as st
 import pandas as pd
