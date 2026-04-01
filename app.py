@@ -1,3 +1,8 @@
+import os
+os.environ["GRPC_DNS_RESOLVER"] = "native"  # 🌟 통신 먹통 방지용 마법의 코드
+import streamlit as st
+import pandas as pd
+import altair as alt
 import streamlit as st
 import pandas as pd
 import altair as alt
