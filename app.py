@@ -53,11 +53,8 @@ else:
     st.title("🚖 Fleet Dashboard (자율주행 택시)")
     st.sidebar.success(f"👤 **{st.session_state.user_name}**님 ({st.session_state.user_role.upper()})")
 
+    # 🌟 [해외 서버 로딩 해결] 기상청 API를 직접 부르지 않고 내부 캐시만 로드하도록 간소화
     with st.status("데이터 동기화 진행 중...", expanded=False) as status:
-        @st.cache_data(ttl=60)
-        def cached_weather(): return fm.get_gangnam_weather()
-        weather_info = cached_weather()
-        
         _, master_data = fm.get_master_data()
         m_cars = master_data.get('cars', [])
         m_drivers = master_data.get('drivers', [])
@@ -65,16 +62,6 @@ else:
         logs = fm.get_ride_logs()
         df = pd.DataFrame(logs)
         status.update(label="✅ 모든 데이터 로드 완료!", state="complete", expanded=False)
-
-    if weather_info:
-        st.markdown("##### 📍 강남구 실시간 날씨 (기상청API)")
-        w_col = st.columns(5)
-        w_col[0].metric("기온", f"{weather_info.get('T1H', '-')} ℃")
-        w_col[1].metric("상태", "비/눈" if weather_info.get('PTY', '0') != '0' else "맑음/흐림")
-        w_col[2].metric("강수", f"{weather_info.get('RN1', '-')} mm")
-        w_col[3].metric("습도", f"{weather_info.get('REH', '-')} %")
-        w_col[4].metric("풍속", f"{weather_info.get('WSD', '-')} m/s")
-        st.divider()
 
     kst_now = pd.Timestamp.utcnow().tz_convert('Asia/Seoul')
     if not df.empty:
@@ -85,10 +72,20 @@ else:
         df['date'] = df['dt_obj'].dt.date
         df = df.sort_values(by='dt_obj', ascending=False)
     else:
-        df = pd.DataFrame(columns=['date', 'dt_obj', 'carNumber', 'driverName', 'passengers', 'callCount', 'remark'])
+        df = pd.DataFrame(columns=['date', 'dt_obj', 'carNumber', 'driverName', 'passengers', 'callCount', 'remark', 'weather'])
         df.loc[0, 'date'] = kst_now.date()
 
+    # --- 사이드바 설정 영역 ---
     st.sidebar.header("⚙️ 대시보드 설정")
+    
+    # 🌟 [추가] 날씨 관측 기준 차량 선택
+    st.sidebar.subheader("📍 날씨 관측 기준")
+    weather_source_car = st.sidebar.selectbox(
+        "기준 차량 선택", 
+        ["자동(최신순)"] + sorted(m_cars),
+        help="선택한 차량이 현장에서 보고한 날씨를 상단에 표시합니다."
+    )
+
     if st.sidebar.button("🔄 데이터 수동 새로고침", use_container_width=True):
         st.rerun()
         
@@ -107,6 +104,41 @@ else:
     sel_cars = st.sidebar.multiselect("차량 번호", sorted(m_cars))
     sel_drivers = st.sidebar.multiselect("운전자 이름", sorted(m_drivers))
 
+    # --- 실시간 현장 날씨 섹션 (상단 배치) ---
+    st.markdown(f"##### 🛰️ 실시간 현장 날씨 관제")
+    
+    # 오늘 데이터 중 선택된 차량(또는 최신순) 데이터만 추출
+    today_str = kst_now.strftime('%Y-%m-%d')
+    w_df = df[df['timestamp_str'].str.contains(today_str)].copy() if not df.empty else pd.DataFrame()
+
+    if weather_source_car != "자동(최신순)" and not w_df.empty:
+        w_df = w_df[w_df['carNumber'] == weather_source_car]
+
+    if not w_df.empty and 'weather' in w_df.columns:
+        current_w = w_df.iloc[0] 
+        raw_weather = current_w['weather']
+        
+        try:
+            cond = raw_weather.split(',')[0].strip()
+            temp = raw_weather.split(',')[1].split('℃')[0].strip() if '℃' in raw_weather else "-"
+        except:
+            cond = "분석중"; temp = "-"
+
+        w_col = st.columns([1, 1, 1, 1.5])
+        w_col[0].metric("현재 기온", f"{temp} ℃")
+        w_col[1].metric("기상 상태", cond)
+        w_col[2].metric("기준 차량", current_w['carNumber'])
+        w_col[3].metric("최종 수신 시각", current_w['timestamp_str'].split(' ')[1])
+        
+        st.caption(f"📢 **현장 리포트:** {raw_weather}")
+    else:
+        st.info(f"📌 {weather_source_car if weather_source_car != '자동(최신순)' else '운행'} 차량의 오늘 날씨 데이터가 아직 없습니다.")
+
+    if st.button("🔄 현장 날씨 즉시 새로고침", use_container_width=True):
+        st.rerun()
+    st.divider()
+
+    # --- 데이터 필터링 로직 ---
     f_df = df.copy()
     if not f_df.empty:
         sd = sel_date[0] if isinstance(sel_date, (tuple, list)) and len(sel_date) > 0 else sel_date
@@ -120,46 +152,44 @@ else:
     with tabs[0]:
         if f_df.empty: st.warning("표시할 데이터가 없습니다.")
         else:
-            daily_max_df = f_df.groupby(['date', 'carNumber'])[['callCount', 'passengers']].max().reset_index()
-            total_calls = int(daily_max_df['callCount'].sum()) if not daily_max_df.empty else 0
-            total_passengers = int(daily_max_df['passengers'].sum()) if not daily_max_df.empty else 0
+            # 중복 제거된 유효 데이터 정제 (이건 그대로 유지)
+            clean_df = f_df.drop_duplicates(subset=['date', 'carNumber', 'callCount'], keep='last').copy()
+            
+            # 🌟 [수정됨] 총 호출 수: 1줄 = 1번의 호출이므로, 전체 줄 개수(len)를 셉니다.
+            total_calls = len(clean_df)
+            
+            # 🌟 [수정됨] 총 탑승객 수: passengers 열의 숫자를 전부 더합니다. (안전을 위해 숫자로 강제 변환)
+            clean_df['passengers'] = pd.to_numeric(clean_df['passengers'], errors='coerce').fillna(0)
+            total_passengers = int(clean_df['passengers'].sum())
 
             m1, m2, m3 = st.columns(3)
             m1.metric("총 호출 수", f"{total_calls} 회")
             m2.metric("총 탑승객 수", f"{total_passengers} 명")
-            m3.metric("운행 차량", f"{f_df['carNumber'].nunique()} 대")
+            m3.metric("운행 차량", f"{clean_df['carNumber'].nunique()} 대")
             
             st.divider()
             cc1, cc2 = st.columns(2)
             with cc1:
                 st.markdown("**🚗 차량별 탑승객 누적**")
-                car_df = daily_max_df.groupby('carNumber')['passengers'].sum().reset_index()
+                # 🌟 [수정됨] 여기서도 daily_max_df가 아니라 clean_df의 전체 합을 구하도록 변경!
+                car_df = clean_df.groupby('carNumber')['passengers'].sum().reset_index()
                 st.altair_chart(alt.Chart(car_df).mark_bar(color="#4CAF50").encode(
                     x=alt.X('carNumber:N', axis=alt.Axis(labelAngle=0)), 
                     y='passengers:Q'
                 ), use_container_width=True)
             with cc2:
                 st.markdown("**⏰ 구간별 운행 건수 (요금표 기준)**")
-                
-                # 🌟 사장님 맞춤형: 시간에 따라 4개의 요금 구간으로 묶어주는 함수
                 def get_time_bracket(h):
-                    if 4 <= h < 22:
-                        return "04~22시(4,800원)"
-                    elif h == 22:
-                        return "22~23시(5,800원)"
-                    elif h in [23, 0, 1]:
-                        return "23~02시(6,700원)"
-                    elif h in [2, 3]:
-                        return "02~04시(5,800원)"
+                    if 4 <= h < 22: return "04~22시(4,800원)"
+                    elif h == 22: return "22~23시(5,800원)"
+                    elif h in [23, 0, 1]: return "23~02시(6,700원)"
+                    elif h in [2, 3]: return "02~04시(5,800원)"
                     return "기타"
 
-                f_df['hour'] = f_df['dt_obj'].dt.hour
-                f_df['time_bracket'] = f_df['hour'].apply(get_time_bracket)
-                
-                bracket_df = f_df.groupby('time_bracket').size().reset_index(name='count')
-                
-                # 🌟 시간 흐름에 맞게 막대그래프 순서 강제 고정
-                bracket_order = ["04~22시", "22~23시", "23~02시", "02~04시"]
+                clean_df['hour'] = clean_df['dt_obj'].dt.hour
+                clean_df['time_bracket'] = clean_df['hour'].apply(get_time_bracket)
+                bracket_df = clean_df.groupby('time_bracket').size().reset_index(name='count')
+                bracket_order = ["04~22시(4,800원)", "22~23시(5,800원)", "23~02시(6,700원)", "02~04시(5,800원)"]
                 
                 st.altair_chart(alt.Chart(bracket_df).mark_bar(color="#2196F3").encode(
                     x=alt.X('time_bracket:N', sort=bracket_order, axis=alt.Axis(labelAngle=0, title='요금 적용 시간대')), 
@@ -167,7 +197,7 @@ else:
                 ), use_container_width=True)
 
             st.divider(); st.subheader("🗺️ 탑승 위치")
-            map_df = f_df.copy()
+            map_df = clean_df.copy()
             if 'latitude' in map_df.columns and 'longitude' in map_df.columns:
                 map_df['latitude'] = pd.to_numeric(map_df['latitude'], errors='coerce')
                 map_df['longitude'] = pd.to_numeric(map_df['longitude'], errors='coerce')
@@ -188,21 +218,12 @@ else:
                         get_radius=20,
                         pickable=True
                     )
-                    st.pydeck_chart(pdk.Deck(
-                        map_style="road", 
-                        initial_view_state=v_state, 
-                        layers=[pt_layer], 
-                        tooltip={"html": "<b>🚗 {carNumber} ({driverName})</b> <br/> 탑승: {passengers}명"}
-                    ))
+                    st.pydeck_chart(pdk.Deck(map_style="road", initial_view_state=v_state, layers=[pt_layer], tooltip={"html": "<b>🚗 {carNumber}</b> <br/> 탑승: {passengers}명"}))
                 else:
-                    st.info("📌 현재 유효한 GPS 좌표가 없어 지도를 표시할 수 없습니다.")
-            else:
-                st.info("📌 위치 데이터 컬럼을 찾을 수 없습니다.")
+                    st.info("📌 유효한 GPS 좌표가 없습니다.")
 
-            # 🌟 [추가됨] 상세 탑승 기록 100개 단위 페이지네이션
             st.divider()
-            
-            final_df = f_df.rename(columns={'carNumber': 'fleet', 'driverName': 'driver', 'callCount': 'call', 'remark': '비고(메모)'})
+            final_df = clean_df.rename(columns={'carNumber': 'fleet', 'driverName': 'driver', 'callCount': 'call', 'remark': '비고(메모)'})
             disp = [c for c in ['timestamp_str', 'fleet', 'driver', 'call', 'passengers', 'latitude', 'longitude', 'weather', '비고(메모)'] if c in final_df.columns]
             
             total_items = len(final_df)
@@ -214,16 +235,10 @@ else:
                 st.subheader("📋 상세 탑승 기록")
                 st.caption(f"총 **{total_items}**건의 기록이 있습니다.")
             with col_page:
-                if total_pages > 1:
-                    page_num = st.number_input("페이지 번호", min_value=1, max_value=total_pages, value=1, step=1)
-                else:
-                    page_num = 1
+                page_num = st.number_input("페이지", min_value=1, max_value=total_pages, value=1, step=1) if total_pages > 1 else 1
 
             start_idx = (page_num - 1) * items_per_page
-            end_idx = start_idx + items_per_page
-            
-            # 필터링 및 페이징이 완료된 데이터프레임 표시
-            st.dataframe(final_df[disp].iloc[start_idx:end_idx], use_container_width=True)
+            st.dataframe(final_df[disp].iloc[start_idx:start_idx+items_per_page], use_container_width=True)
 
     if st.session_state.user_role == 'admin':
         with tabs[1]:
@@ -234,6 +249,7 @@ else:
                     else: st.error("불일치")
             else:
                 if st.button("🚪 설정 닫기"): st.session_state.settings_unlocked = False; st.rerun()
+                
                 st.markdown("### 👥 회원 승인 관리")
                 u_df = pd.DataFrame(fm.get_all_users())
                 if not u_df.empty:
@@ -250,24 +266,19 @@ else:
                 mc1, mc2 = st.columns(2)
                 ec = mc1.data_editor(pd.DataFrame(m_cars, columns=['차량번호']), num_rows="dynamic", key="admin_ec")
                 ed = mc2.data_editor(pd.DataFrame(m_drivers, columns=['기사이름']), num_rows="dynamic", key="admin_ed")
-                if st.button("💾 데이터 저장"):
+                if st.button("💾 마스터 데이터 저장"):
                     fm.update_master_data(ec['차량번호'].dropna().tolist(), ed['기사이름'].dropna().tolist())
                     st.success("저장 완료"); time.sleep(0.5); st.rerun()
 
                 st.divider(); st.markdown("### 🗄️ 운행 기록 상세 관리 (엑셀 모드)")
-                if not f_df.empty:
-                    edit_df = f_df[['doc_id', 'timestamp_str', 'carNumber', 'driverName', 'callCount', 'passengers', 'remark']].copy()
-                    
-                    # 🌟 [추가됨] 마법의 전체 선택 체크박스!
+                if not clean_df.empty:
+                    edit_df = clean_df[['doc_id', 'timestamp_str', 'carNumber', 'driverName', 'callCount', 'passengers', 'remark']].copy()
                     select_all = st.checkbox("✅ 전체 기록 삭제 선택 (초기화용)")
-                    
-                    # select_all이 켜지면 전부 True, 꺼지면 전부 False로 일괄 적용됩니다.
                     edit_df.insert(0, '🗑️ 삭제', select_all) 
-                    
                     edit_df = edit_df.rename(columns={'timestamp_str': '시간', 'carNumber': '차량', 'driverName': '기사', 'callCount': '호출', 'passengers': '탑승객', 'remark': '📝 비고'})
-                    edited_df = st.data_editor(edit_df, hide_index=True, use_container_width=True, disabled=['시간', '차량', '기사', '호출', '탑승객'], column_config={"doc_id": None, "🗑️ 삭제": st.column_config.CheckboxColumn("🗑️ 삭제", default=False), "📝 비고": st.column_config.TextColumn("📝 비고")})
+                    edited_df = st.data_editor(edit_df, hide_index=True, use_container_width=True, disabled=['시간', '차량', '기사', '호출', '탑승객'], column_config={"doc_id": None})
                     
-                    if st.button("💾 기록 저장"):
+                    if st.button("💾 기록 일괄 저장"):
                         deleted_count = 0
                         for idx, row in edited_df.iterrows():
                             if row['🗑️ 삭제']: 
@@ -275,8 +286,7 @@ else:
                                 deleted_count += 1
                             elif edit_df.loc[idx, '📝 비고'] != row['📝 비고']: 
                                 fm.update_ride_remark(row['doc_id'], row['📝 비고'])
-                                
-                        st.success(f"🧹 총 {deleted_count}건 삭제 및 기록 처리 완료!"); time.sleep(1); st.rerun()
+                        st.success(f"🧹 {deleted_count}건 삭제 및 처리 완료!"); time.sleep(1); st.rerun()
 
     if auto_refresh:
         time.sleep(10)
