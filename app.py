@@ -57,19 +57,26 @@ else:
     st.title("🚖 Fleet Dashboard (자율주행 택시)")
     st.sidebar.success(f"👤 **{st.session_state.user_name}**님 ({st.session_state.user_role.upper()})")
 
-    # 🌟 [수정됨] 거슬리는 추적기 메시지를 1줄짜리 '접이식 상태창'으로 깔끔하게 숨깁니다!
+    # 🌟 [수정됨] 에러를 화면에 뱉어내는 포획망이 적용된 상태창
     with st.status("🔄 파이어베이스 데이터 동기화 중...", expanded=False) as status:
-        st.write("⏳ 1. 데이터(차량/기사) 요청 중...")
-        _, master_data = fm.get_master_data()
-        st.write("✅ 1. 데이터 로드 완료!")
-        m_cars = master_data.get('cars', [])
-        m_drivers = master_data.get('drivers', [])
+        try:
+            st.write("⏳ 1. 마스터 데이터(차량/기사) 요청 중...")
+            _, master_data = fm.get_master_data()
+            if master_data is None: master_data = {'cars': [], 'drivers': []}
+            st.write("✅ 1. 마스터 데이터 로드 완료!")
+            m_cars = master_data.get('cars', [])
+            m_drivers = master_data.get('drivers', [])
 
-        st.write("⏳ 2. 운행 기록(Logs) 데이터 요청 중...")
-        logs = fm.get_ride_logs()
-        st.write(f"✅ 2. 운행 기록 {len(logs)}건 로드 완료!")
-        df = pd.DataFrame(logs)
-        status.update(label="✅ 모든 데이터 로드 완료!", state="complete", expanded=False)
+            st.write("⏳ 2. 운행 기록(Logs) 데이터 요청 중...")
+            logs = fm.get_ride_logs()
+            if logs is None: logs = []
+            st.write(f"✅ 2. 운행 기록 {len(logs)}건 로드 완료!")
+            df = pd.DataFrame(logs)
+            status.update(label="✅ 모든 데이터 로드 완료!", state="complete", expanded=False)
+        except Exception as e:
+            st.error(f"🚨 파이어베이스 통신 중 에러 발생: {e}")
+            status.update(label="❌ 데이터 로드 실패 (에러 확인)", state="error", expanded=True)
+            st.stop()
 
     kst_now = pd.Timestamp.utcnow().tz_convert('Asia/Seoul')
     if not df.empty:
@@ -80,7 +87,7 @@ else:
         df['date'] = df['dt_obj'].dt.date
         df = df.sort_values(by='dt_obj', ascending=False)
     else:
-        # 🌟 [완벽 수정] 가짜 데이터(1줄) 넣지 말고, 기둥(컬럼)만 세워둔 '완전 빈 표(0줄)'로 만듭니다!
+        # 🌟 [수정됨] 완벽한 빈 도화지 (기둥만 세우기)
         df = pd.DataFrame(columns=[
             'timestamp', 'timestamp_safe', 'timestamp_str', 'date', 'dt_obj', 
             'carNumber', 'driverName', 'passengers', 'callCount', 
@@ -90,7 +97,6 @@ else:
     # --- 사이드바 설정 영역 ---
     st.sidebar.header("⚙️ 대시보드 설정")
     
-    # 🌟 [추가] 날씨 관측 기준 차량 선택
     st.sidebar.subheader("📍 날씨 관측 기준")
     weather_source_car = st.sidebar.selectbox(
         "기준 차량 선택", 
@@ -116,10 +122,9 @@ else:
     sel_cars = st.sidebar.multiselect("차량 번호", sorted(m_cars))
     sel_drivers = st.sidebar.multiselect("운전자 이름", sorted(m_drivers))
 
-    # --- 실시간 현장 날씨 섹션 (상단 배치) ---
+    # --- 실시간 현장 날씨 섹션 ---
     st.markdown(f"##### 🛰️ 실시간 현장 날씨 관제")
     
-    # 🌟 [수정됨] 'timestamp_str' 기둥이 진짜 있는지 먼저 확인하는 안전장치 추가!
     today_str = kst_now.strftime('%Y-%m-%d')
     if not df.empty and 'timestamp_str' in df.columns:
         w_df = df[df['timestamp_str'].str.contains(today_str, na=False)].copy()
@@ -162,23 +167,20 @@ else:
         if sel_cars: f_df = f_df[f_df['carNumber'].isin(sel_cars)]
         if sel_drivers: f_df = f_df[f_df['driverName'].isin(sel_drivers)]
 
-    # 🌟 [에러 해결!] 데이터가 없더라도 clean_df라는 '빈 통'을 무조건 만들어둡니다.
+    # 🌟 [수정됨] 엑셀 탭 에러 방지용 빈 통 만들기
     if f_df.empty:
         clean_df = pd.DataFrame(columns=f_df.columns if not f_df.empty else [])
     else:
-        # 중복 제거된 유효 데이터 정제
         clean_df = f_df.drop_duplicates(subset=['date', 'carNumber', 'callCount'], keep='last').copy()
 
     tabs = st.tabs(["📊 누적 현황", "⚙️ 관리자 설정"]) if st.session_state.user_role == 'admin' else st.tabs(["📊 누적 현황"])
 
-    # 🌟 [복구 완료] 실수로 지워진 탭 열기와 빈 데이터 경고창을 다시 살렸습니다!
     with tabs[0]:
-        if clean_df.empty: 
+        # 🌟 [수정됨] 데이터 없을 때 깔끔하게 경고창만 띄우기
+        if clean_df.empty:
             st.warning("⚠️ 표시할 운행 데이터가 없습니다.")
         else:
-            total_calls = len(clean_df) # 이것도 같이 지워져서 복구!
-            
-            # 🌟 [수정됨] 총 탑승객 수: passengers 열의 숫자를 전부 더합니다. (안전을 위해 숫자로 강제 변환)
+            total_calls = len(clean_df)
             clean_df['passengers'] = pd.to_numeric(clean_df['passengers'], errors='coerce').fillna(0)
             total_passengers = int(clean_df['passengers'].sum())
 
@@ -191,7 +193,6 @@ else:
             cc1, cc2 = st.columns(2)
             with cc1:
                 st.markdown("**🚗 차량별 탑승객 누적**")
-                # 🌟 [수정됨] 여기서도 daily_max_df가 아니라 clean_df의 전체 합을 구하도록 변경!
                 car_df = clean_df.groupby('carNumber')['passengers'].sum().reset_index()
                 st.altair_chart(alt.Chart(car_df).mark_bar(color="#4CAF50").encode(
                     x=alt.X('carNumber:N', axis=alt.Axis(labelAngle=0)), 
@@ -206,10 +207,8 @@ else:
                     elif h in [2, 3]: return "02~04시(5,800원)"
                     return "기타"
 
-                # 🌟 [여기 수정됨!!] 파이썬이 딴소리 못하게 무조건 '시간(Datetime)' 데이터로 강제 변환!
+                # 🌟 [수정됨] 차트 시간 속성 에러 방지
                 clean_df['dt_obj'] = pd.to_datetime(clean_df['dt_obj'], errors='coerce')
-                
-                # 이제 에러 없이 안전하게 '시(hour)'를 뽑아냅니다.
                 clean_df['hour'] = clean_df['dt_obj'].dt.hour
                 clean_df['time_bracket'] = clean_df['hour'].apply(get_time_bracket)
                 bracket_df = clean_df.groupby('time_bracket').size().reset_index(name='count')
@@ -290,7 +289,7 @@ else:
                 mc1, mc2 = st.columns(2)
                 ec = mc1.data_editor(pd.DataFrame(m_cars, columns=['차량번호']), num_rows="dynamic", key="admin_ec")
                 ed = mc2.data_editor(pd.DataFrame(m_drivers, columns=['기사이름']), num_rows="dynamic", key="admin_ed")
-                if st.button("💾 저장(적용)"):
+                if st.button("💾 마스터 데이터 저장"):
                     fm.update_master_data(ec['차량번호'].dropna().tolist(), ed['기사이름'].dropna().tolist())
                     st.success("저장 완료"); time.sleep(0.5); st.rerun()
 
