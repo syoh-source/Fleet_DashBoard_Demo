@@ -26,7 +26,6 @@ if not st.session_state.logged_in:
             st.markdown("<div style='margin-bottom: 5px; font-size: 14px; font-weight: 600; color: #475569;'>🖥️ 접속 환경 선택</div>", unsafe_allow_html=True)
             device_mode = st.radio("접속 기기", ["💻 PC / 태블릿", "📱 모바일 (스마트폰)"], horizontal=True, label_visibility="collapsed")
             
-            # UI는 진짜처럼 보이게, 입력값은 portfolio / trial 사용
             u_id = st.text_input("사내 통합 아이디", key="main_login_id"); u_pw = st.text_input("비밀번호", type="password", key="main_login_pw")
             
             KST = datetime.timezone(datetime.timedelta(hours=9))
@@ -36,7 +35,7 @@ if not st.session_state.logged_in:
             if st.button("로그인 🚀", use_container_width=True):
                 if u_id == "portfolio" and u_pw == "trial":
                     if kst_now.date() > expiry_date:
-                        st.error("⏳ 임시 계정의 사용기간이 만료되었습니다.", icon="🚫")
+                        st.error("⏳ 발급된 임시 계정의 접속 기간이 만료되었습니다. 사내 시스템 담당자에게 문의 바랍니다.", icon="🚫")
                     else:
                         st.session_state.update({'logged_in': True, 'user_id': u_id, 'user_role': 'admin', 'user_name': '임시접속(Guest)', 'user_position': 'Data Manager', 'is_mobile': "모바일" in device_mode, 'shift': '주간 (08:00~17:30)', 'region': '전체', 'is_demo': True})
                         st.rerun()
@@ -105,8 +104,9 @@ def get_dashboard_data():
             dt = now - datetime.timedelta(days=i%14)
             car = m_cars[i%5]
             drv = m_drivers[i%5]
-            d_logs.append({'timestamp': dt.replace(hour=8), '날짜': dt.strftime('%Y-%m-%d'), '차량번호': car, 'Safe_Guard': drv, '유형': '출발', '출발_km': 15000+i*100, '출발_배터리_차량': 100})
-            d_logs.append({'timestamp': dt.replace(hour=17), '날짜': dt.strftime('%Y-%m-%d'), '차량번호': car, 'Safe_Guard': drv, '유형': '종료', '종료_km': 15000+i*100+95, '종료_배터리_차량': 30, '총주행거리(km)': 95, '특이사항': '특이사항 없음'})
+            # 🌟 수정: 출발자와 종료자 컬럼을 완벽하게 추가하여 KeyError 방지
+            d_logs.append({'timestamp': dt.replace(hour=8), '날짜': dt.strftime('%Y-%m-%d'), '차량번호': car, 'Safe_Guard': drv, '출발자': drv, '종료자': '', '유형': '출발', '출발_km': 15000+i*100, '출발_배터리_차량': 100})
+            d_logs.append({'timestamp': dt.replace(hour=17), '날짜': dt.strftime('%Y-%m-%d'), '차량번호': car, 'Safe_Guard': drv, '출발자': '', '종료자': drv, '유형': '종료', '종료_km': 15000+i*100+95, '종료_배터리_차량': 30, '총주행거리(km)': 95, '특이사항': '특이사항 없음'})
             
         s_logs = []
         for i in range(14):
