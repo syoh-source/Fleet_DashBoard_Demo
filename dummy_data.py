@@ -3,7 +3,7 @@ import random
 from datetime import datetime, timedelta, timezone
 
 def get_demo_data():
-    # 1. 마스터 정보
+    # 1. 마스터 정보 세팅
     m_cars = ["E100#1", "E100#2", "E100#3"]
     m_drivers = ["정재훈", "이철수", "김준", "최영희"]
     
@@ -14,7 +14,7 @@ def get_demo_data():
         {"name": "최영희", "region": "강남", "shift": "야간 (18:00~03:00)"}
     ])
     
-    # 2. 15일치 더미 데이터 동적 생성
+    # 2. 15일치 더미 데이터 동적 생성 (현재 시간 기준 15일 전부터)
     KST = timezone(timedelta(hours=9))
     base_date = datetime(2026, 7, 6, tzinfo=KST)
     
@@ -39,10 +39,10 @@ def get_demo_data():
             start_time = current_date.replace(hour=8, minute=0)
             start_km = km_tracker[car]
             
-            # (1) 주간 출발 기록 (AttributeError 방지를 위해 출발자 명시)
+            # (1) 주간 출발 기록
             df_drive_data.append({
                 "id": f"start_{date_str}_{driver}", "유형": "출발", 
-                "차량번호": car, "Safe_Guard": driver, "출발자": driver, "종료자": "",
+                "차량번호": car, "Safe_Guard": driver, # 원본 DB 규격 엄수
                 "출발_장소": "차고지", "출발_km": start_km,
                 "출발_배터리_차량": random.randint(90, 100), "날짜": date_str,
                 "timestamp": start_time.isoformat()
@@ -71,7 +71,7 @@ def get_demo_data():
             
             df_drive_data.append({
                 "id": f"end_{date_str}_{driver}", "유형": "종료", 
-                "차량번호": car, "Safe_Guard": driver, "출발자": "", "종료자": driver, 
+                "차량번호": car, "Safe_Guard": driver,
                 "종료_장소": "차고지", "종료_km": end_km, "총주행거리(km)": drive_dist, 
                 "종료_배터리_차량": random.randint(20, 50), "날짜": date_str, 
                 "timestamp": end_time.isoformat(), "특이사항": "이상 없음"
@@ -91,7 +91,7 @@ def get_demo_data():
             # (1) 야간 출발 기록
             df_drive_data.append({
                 "id": f"start_{date_str}_night_{driver}", "유형": "출발", 
-                "차량번호": car, "Safe_Guard": driver, "출발자": driver, "종료자": "",
+                "차량번호": car, "Safe_Guard": driver,
                 "출발_장소": "교대거점", "출발_km": start_km,
                 "출발_배터리_차량": random.randint(80, 100), "날짜": date_str,
                 "timestamp": start_time.isoformat()
@@ -120,7 +120,7 @@ def get_demo_data():
             
             df_drive_data.append({
                 "id": f"end_{date_str}_night_{driver}", "유형": "종료", 
-                "차량번호": car, "Safe_Guard": driver, "출발자": "", "종료자": driver, 
+                "차량번호": car, "Safe_Guard": driver,
                 "종료_장소": "차고지", "종료_km": end_km, "총주행거리(km)": drive_dist, 
                 "종료_배터리_차량": random.randint(10, 40), 
                 "날짜": end_time.strftime("%Y-%m-%d"), 
