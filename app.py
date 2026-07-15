@@ -3,6 +3,7 @@ import warnings; warnings.filterwarnings("ignore")
 import streamlit as st; import pandas as pd; import time; import datetime; import ast; import json; import streamlit.components.v1 as components
 import firebase_manager as fm; import chart_utils as dc; import admin_manager as am; import admin_utils as utils
 import tab_summary; import tab_safeguard; import tab_vehicle 
+import dummy_data
 
 class DummyAdm:
     def get_cached_raw_data(self): return [], [], []
@@ -68,53 +69,11 @@ if time.time() - global_state['last_sync_time'] > 60:
 
 @st.cache_resource(ttl=60)
 def get_dashboard_data():
+    # 🌟 데모 모드일 경우 분리된 파일에서 데이터 호출
     if st.session_state.get('is_demo', False):
-        now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
-        m_cars = ['E100#1', 'E100#2', 'U100#1', 'U100#2', '볼트_Test']
-        m_drivers = ['홍길동', '김정석', '박데이터', '이비전', '최분석']
-        u_df = pd.DataFrame([
-            {'name': '홍길동', 'region': '상암', 'shift': '주간 (08:00~17:30)', 'can_view_dashboard': True, 'is_driver': True, 'is_admin': False, 'is_support': False},
-            {'name': '김정석', 'region': '강남', 'shift': '야간 (21:00~06:00)', 'can_view_dashboard': True, 'is_driver': True, 'is_admin': False, 'is_support': False},
-            {'name': '박데이터', 'region': '상암', 'shift': '주간 (08:00~17:30)', 'can_view_dashboard': True, 'is_driver': True, 'is_admin': False, 'is_support': False},
-            {'name': '이비전', 'region': '강남', 'shift': '야간 (21:00~06:00)', 'can_view_dashboard': True, 'is_driver': True, 'is_admin': False, 'is_support': False},
-            {'name': '최분석', 'region': '상암', 'shift': '주간 (08:00~17:30)', 'can_view_dashboard': True, 'is_driver': True, 'is_admin': False, 'is_support': False}
-        ])
-        
-        r_logs = []
-        for i in range(80):
-            rt = now - datetime.timedelta(days=i%14, hours=(i*7)%24, minutes=(i*13)%60)
-            r_start = int(rt.timestamp()*1000)
-            r_logs.append({
-                'timestamp': rt,
-                'ride_start_time': r_start,
-                'ride_end_time': r_start + (1000 * 60 * ((i%15)+5)), 
-                'carNumber': m_cars[i%5],
-                'driverName': m_drivers[i%5],
-                'passengers': (i%3)+1,
-                'callCount': 1,
-                'status': 'COMPLETED',
-                'remark': 'VIP 수행' if i%11==0 else ('데이터 수집' if i%7==0 else ''),
-                'report_memos': {str(r_start): f"[{['차량', '시스템', '인지', '주행'][i%4]} > {['경고등', '모듈 에러', '보행자 미/오인지', '급감속'][i%4]}] 자동 기록된 이슈입니다."} if i%4==0 else {},
-                'latitude': 37.5 + (i%10)*0.01, 'longitude': 127.0 + (i%10)*0.01,
-                'Safeview': f"v1.{i%3}", 'CPU': 'v2.1', 'MCU': 'v1.5', 'VPU1': 'v3.0', 'VPU2': 'v3.0', 'VPU3': 'v3.0', 'VPU4': 'v3.0'
-            })
-            
-        d_logs = []
-        for i in range(30):
-            dt = now - datetime.timedelta(days=i%14)
-            car = m_cars[i%5]
-            drv = m_drivers[i%5]
-            d_logs.append({'timestamp': dt.replace(hour=8), '날짜': dt.strftime('%Y-%m-%d'), '차량번호': car, 'Safe_Guard': drv, '출발자': drv, '종료자': '', '유형': '출발', '출발_km': 15000+i*100, '출발_배터리_차량': 100})
-            d_logs.append({'timestamp': dt.replace(hour=17), '날짜': dt.strftime('%Y-%m-%d'), '차량번호': car, 'Safe_Guard': drv, '출발자': '', '종료자': drv, '유형': '종료', '종료_km': 15000+i*100+95, '종료_배터리_차량': 30, '총주행거리(km)': 95, '특이사항': '특이사항 없음'})
-            
-        s_logs = []
-        for i in range(14):
-            dt = now - datetime.timedelta(days=i)
-            for j in range(5):
-                s_logs.append({'date': dt.strftime('%Y-%m-%d'), 'name': m_drivers[j], 'type': f"배정({m_cars[(i+j)%5]})"})
-                
-        return {'m_cars': m_cars, 'm_drivers': m_drivers, 'u_df': u_df, 'df': pd.DataFrame(r_logs), 'df_drive': pd.DataFrame(d_logs), 'sched_df': pd.DataFrame(s_logs)}
+        return dummy_data.generate_dummy_data()
 
+    # 🌟 일반 모드일 경우 실제 DB에서 데이터 호출
     _, m = fm.get_master_data()
     return {'m_cars': m.get('cars', []), 'm_drivers': m.get('drivers', []), 'u_df': pd.DataFrame(fm.get_all_users()), 'df': pd.DataFrame(fm.get_ride_logs()), 'df_drive': pd.DataFrame(fm.get_driving_logs()), 'sched_df': pd.DataFrame(fm.get_schedules() if fm.get_schedules() else [])}
 
@@ -152,6 +111,19 @@ if not df.empty:
     df = df.sort_values('dt_obj', ascending=False)
 else: df = pd.DataFrame(columns=['timestamp_str', 'date_str', 'shift_date', 'dt_obj', 'carNumber', 'driverName', 'passengers', 'callCount', 'remark', 'status', 'region', 'shift'])
 
+
+# 🌟 무적의 컬럼 방어 (에러 원천 차단)
+# tab_summary.py 가 어떤 이름으로 찾더라도 무조건 빈칸이라도 존재하게 만듭니다.
+safety_cols = [
+    'Safe_Guard', '차량번호', 'carNumber', '출발자', '종료자', '유형', 
+    '출발_km', '종료_km', '총주행거리(km)', '주행거리', 
+    '출발_배터리_차량', '종료_배터리_차량', '출발_배터리', '종료_배터리', 
+    '특이사항', '비고', 'is_start', 'shift_id', 'shift_start_dt', 'region', 'shift', 'shift_date'
+]
+for col in safety_cols:
+    if col not in df_drive.columns:
+        df_drive[col] = None
+
 if not df_drive.empty:
     def p_dt(r):
         v = r.get('timestamp') if pd.notna(r.get('timestamp')) else r.get('날짜')
@@ -162,18 +134,18 @@ if not df_drive.empty:
     df_drive['dt_obj'] = df_drive.apply(p_dt, axis=1)
     df_drive['dt_obj'] = df_drive['dt_obj'].apply(lambda x: x.tz_localize('Asia/Seoul') if getattr(x, 'tz', None) is None else x.tz_convert('Asia/Seoul'))
     
-    # 🌟 무적의 방어 코드: tab_summary가 필요로 하는 모든 컬럼을 강제 생성하여 KeyError 원천 차단
-    required_cols = ['Safe_Guard', '차량번호', '출발자', '종료자', '유형', '출발_km', '종료_km', '출발_배터리_차량', '종료_배터리_차량', '총주행거리(km)', '특이사항']
-    for col in required_cols:
-        if col not in df_drive.columns:
-            df_drive[col] = None
-
+    # 누락된 데이터 억지로 채워넣기 (에러 방지)
     df_drive['Safe_Guard'] = df_drive['Safe_Guard'].astype(str).str.strip()
     df_drive['출발자'] = df_drive['출발자'].fillna(df_drive['Safe_Guard'])
     df_drive['종료자'] = df_drive['종료자'].fillna(df_drive['Safe_Guard'])
-    
     df_drive['차량번호'] = df_drive['차량번호'].astype(str).str.strip()
     df_drive['carNumber'] = df_drive['차량번호']
+    
+    # 동의어 컬럼 복제
+    df_drive['주행거리'] = df_drive['주행거리'].fillna(df_drive['총주행거리(km)'])
+    df_drive['출발_배터리'] = df_drive['출발_배터리'].fillna(df_drive['출발_배터리_차량'])
+    df_drive['종료_배터리'] = df_drive['종료_배터리'].fillna(df_drive['종료_배터리_차량'])
+    df_drive['비고'] = df_drive['비고'].fillna(df_drive['특이사항'])
     
     df_drive = df_drive.sort_values(['차량번호', 'dt_obj']).reset_index(drop=True)
     df_drive['is_start'] = df_drive['유형'].astype(str).str.replace(' ', '').str.strip().isin(['출발', '시작', '출근'])
