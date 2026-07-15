@@ -206,6 +206,32 @@ def draw_summary_tab(clean_df, df_drive_raw):
         dmg['총주행거리(km)'] = dmg['총주행거리(km)'].fillna(0)
         dmg['특이사항'] = dmg['특이사항'].fillna('')
 
+        # ==========================================
+        # [새롭게 추가된 운행시간 계산 로직]
+        # ==========================================
+        def calc_duration(r):
+            if pd.isna(r['출발_시간']) or pd.isna(r['종료_시간']):
+                return ""
+            try:
+                # 출발_시간과 종료_시간을 안전하게 datetime으로 변환 후 시간 차이 계산
+                t_end = pd.to_datetime(r['종료_시간'], utc=True)
+                t_start = pd.to_datetime(r['출발_시간'], utc=True)
+                td = t_end - t_start
+                total_seconds = int(td.total_seconds())
+                
+                if total_seconds < 0: 
+                    return ""
+                    
+                hours, remainder = divmod(total_seconds, 3600)
+                minutes, _ = divmod(remainder, 60)
+                return f"{hours}시간 {minutes}분"
+            except:
+                return ""
+                
+        # dmg 데이터프레임에 '운행시간' 컬럼 추가
+        dmg['운행시간'] = dmg.apply(calc_duration, axis=1)
+        # ==========================================
+
     if not clean_df.empty:
         cdf = clean_df.copy()
         def safe_dt_parse(v):
@@ -253,7 +279,7 @@ def draw_summary_tab(clean_df, df_drive_raw):
                 if ap: return " / ".join(ap) + " (app)"
             elif isinstance(ms, list) and ms:
                 ap = [str(x) for x in ms if str(x).strip()]
-                if ap: return " / ".join(ap) + " (app)"
+                if ap: return " / 대여 (app)" # list 형태면 임시 처리
             return ""
             
         cdf['통합_이슈상세'] = cdf.apply(x_m, axis=1)
