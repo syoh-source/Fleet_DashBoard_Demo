@@ -104,7 +104,6 @@ def get_dashboard_data():
             dt = now - datetime.timedelta(days=i%14)
             car = m_cars[i%5]
             drv = m_drivers[i%5]
-            # 🌟 수정: 출발자와 종료자 컬럼을 완벽하게 추가하여 KeyError 방지
             d_logs.append({'timestamp': dt.replace(hour=8), '날짜': dt.strftime('%Y-%m-%d'), '차량번호': car, 'Safe_Guard': drv, '출발자': drv, '종료자': '', '유형': '출발', '출발_km': 15000+i*100, '출발_배터리_차량': 100})
             d_logs.append({'timestamp': dt.replace(hour=17), '날짜': dt.strftime('%Y-%m-%d'), '차량번호': car, 'Safe_Guard': drv, '출발자': '', '종료자': drv, '유형': '종료', '종료_km': 15000+i*100+95, '종료_배터리_차량': 30, '총주행거리(km)': 95, '특이사항': '특이사항 없음'})
             
@@ -162,7 +161,12 @@ if not df_drive.empty:
         
     df_drive['dt_obj'] = df_drive.apply(p_dt, axis=1)
     df_drive['dt_obj'] = df_drive['dt_obj'].apply(lambda x: x.tz_localize('Asia/Seoul') if getattr(x, 'tz', None) is None else x.tz_convert('Asia/Seoul'))
-    df_drive['Safe_Guard'] = df_drive['Safe_Guard'].astype(str).str.strip()
+    df_drive['Safe_Guard'] = df_drive.get('Safe_Guard', '').astype(str).str.strip()
+    
+    # 🌟 완벽한 방어 코드: 어떤 상황에서도 출발자와 종료자 컬럼이 존재하도록 강제 생성
+    df_drive['출발자'] = df_drive.get('출발자', df_drive['Safe_Guard'])
+    df_drive['종료자'] = df_drive.get('종료자', df_drive['Safe_Guard'])
+    
     df_drive['차량번호'] = df_drive.get('차량번호', '').astype(str).str.strip()
     df_drive['carNumber'] = df_drive['차량번호']
     
