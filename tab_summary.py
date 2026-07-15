@@ -136,6 +136,10 @@ def get_toss_style_weather(target_region):
 def draw_summary_tab(clean_df, df_drive_raw):
     mbl = st.session_state.get('is_mobile', False)
     
+    # ⛅ [날씨 배너 복구 완료] 사용자 접속 지역 기준 날씨 표출
+    weather_region = st.session_state.get("region", "전체")
+    st.markdown(get_toss_style_weather(weather_region), unsafe_allow_html=True)
+    
     if "init_call_id_done" not in st.session_state:
         r_id = st.query_params.get("call_id", st.session_state.get("saved_call_id", None))
         if r_id: st.session_state["saved_call_id"] = urllib.parse.unquote_plus(r_id).replace("+", " ")
