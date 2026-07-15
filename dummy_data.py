@@ -3,12 +3,15 @@ import random
 from datetime import datetime, timedelta, timezone
 
 def get_demo_data():
-    m_cars = [f"E100#{i:02d}" for i in range(1, 14)] # 13대
+    # 1. 13대 차량 세팅 (사진과 동일한 E01~E13 포맷)
+    m_cars = [f"E{i:02d}" for i in range(1, 14)] 
     
+    # 2. 26명 운전자 세팅 (주/야간 각 13명 - 사진 참고)
     day_drivers = ["김민준", "이서준", "박도윤", "최시우", "정지호", "강건우", "조은우", "윤선우", "장서진", "임연우", "한유준", "오하준", "서도현"]
     night_drivers = ["김서연", "이서윤", "박지우", "최지민", "정다은", "강하은", "조하윤", "윤시아", "장지율", "임서현", "한아린", "오채원", "서소율"]
     m_drivers = day_drivers + night_drivers
     
+    # 3. 차량/운전자별 지역 배분 (상암 5대, 강남 4대, 안양 4대)
     regions = ["상암"]*5 + ["강남"]*4 + ["안양"]*4
     
     # 📍 지역별 타이트한 위경도 범위 (한강 진입 원천 차단)
@@ -25,14 +28,22 @@ def get_demo_data():
     u_df = pd.DataFrame(u_df_data)
     
     KST = timezone(timedelta(hours=9))
-    base_date = datetime.now(KST).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=15)
+    base_date = datetime.now(KST).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=22)
     
-    df_data = []
-    df_drive_data = []
+    df_data = []       
+    df_drive_data = [] 
     km_tracker = {car: random.randint(10000, 50000) for car in m_cars}
     
-    for day_offset in range(16): 
-        current_date = base_date + timedelta(days=day_offset)
+    valid_days = 0
+    current_date = base_date
+    
+    # 📆 평일(월~금)만 15일치 채우기 로직
+    while valid_days < 15:
+        current_date += timedelta(days=1)
+        if current_date.weekday() >= 5: # 5:토요일, 6:일요일 스킵
+            continue
+            
+        valid_days += 1
         date_str = current_date.strftime("%Y-%m-%d")
         
         for i, car in enumerate(m_cars):
@@ -40,18 +51,20 @@ def get_demo_data():
             min_lat, max_lat, min_lon, max_lon = bbox[region]
             
             # ==============================
-            # ☀️ 주간조
+            # ☀️ 주간조 운행
             # ==============================
             driver_d = day_drivers[i]
             start_time_d = current_date.replace(hour=8, minute=random.randint(0, 15))
             start_km_d = km_tracker[car]
-            start_ms_d = int(start_time_d.timestamp() * 1000) # ValueError 방지용 ms 숫자
+            
+            # ValueError 방지: 원본 JSON과 똑같은 ISO UTC 문자열 생성
+            ts_iso_start_d = start_time_d.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000000+00:00")
             
             df_drive_data.append({
                 "id": f"start_{date_str}_D_{car}", "유형": "출발", "차량번호": car, 
                 "Safe_Guard": driver_d, "출발자": driver_d, "종료자": "",
                 "출발_장소": f"{region} 차고지", "출발_km": start_km_d, 
-                "출발_배터리_차량": random.randint(90, 100), "날짜": date_str, "timestamp": start_ms_d
+                "출발_배터리_차량": str(random.randint(90, 100)), "날짜": date_str, "timestamp": ts_iso_start_d
             })
             
             num_rides_d = random.randint(6, 12)
@@ -71,7 +84,7 @@ def get_demo_data():
                 ride_start = ride_end + timedelta(minutes=random.randint(5, 15))
             
             end_time_d = current_date.replace(hour=17, minute=random.randint(15, 45))
-            end_ms_d = int(end_time_d.timestamp() * 1000)
+            ts_iso_end_d = end_time_d.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000000+00:00")
             drive_dist_d = random.randint(60, 120)
             end_km_d = start_km_d + drive_dist_d
             km_tracker[car] = end_km_d
@@ -80,23 +93,23 @@ def get_demo_data():
                 "id": f"end_{date_str}_D_{car}", "유형": "종료", "차량번호": car, 
                 "Safe_Guard": driver_d, "출발자": "", "종료자": driver_d, 
                 "종료_장소": f"{region} 차고지", "종료_km": end_km_d, "총주행거리(km)": drive_dist_d, 
-                "종료_배터리_차량": random.randint(20, 50), "날짜": date_str, 
-                "timestamp": end_ms_d, "특이사항": random.choice(["이상 없음", "세차 요망", ""])
+                "종료_배터리_차량": str(random.randint(20, 50)), "날짜": date_str, 
+                "timestamp": ts_iso_end_d, "특이사항": random.choice(["이상 없음", "세차 요망", ""])
             })
 
             # ==============================
-            # 🌙 야간조
+            # 🌙 야간조 운행
             # ==============================
             driver_n = night_drivers[i]
             start_time_n = current_date.replace(hour=18, minute=random.randint(0, 15))
             start_km_n = km_tracker[car]
-            start_ms_n = int(start_time_n.timestamp() * 1000)
+            ts_iso_start_n = start_time_n.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000000+00:00")
             
             df_drive_data.append({
                 "id": f"start_{date_str}_N_{car}", "유형": "출발", "차량번호": car, 
                 "Safe_Guard": driver_n, "출발자": driver_n, "종료자": "",
                 "출발_장소": f"{region} 교대거점", "출발_km": start_km_n, 
-                "출발_배터리_차량": random.randint(80, 100), "날짜": date_str, "timestamp": start_ms_n
+                "출발_배터리_차량": str(random.randint(80, 100)), "날짜": date_str, "timestamp": ts_iso_start_n
             })
             
             num_rides_n = random.randint(5, 15)
@@ -116,7 +129,7 @@ def get_demo_data():
                 ride_start = ride_end + timedelta(minutes=random.randint(10, 25))
             
             end_time_n = (current_date + timedelta(days=1)).replace(hour=3, minute=random.randint(0, 30))
-            end_ms_n = int(end_time_n.timestamp() * 1000)
+            ts_iso_end_n = end_time_n.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000000+00:00")
             drive_dist_n = random.randint(80, 150)
             end_km_n = start_km_n + drive_dist_n
             km_tracker[car] = end_km_n
@@ -126,8 +139,8 @@ def get_demo_data():
                 "id": f"end_{date_str}_N_{car}", "유형": "종료", "차량번호": car, 
                 "Safe_Guard": driver_n, "출발자": "", "종료자": driver_n, 
                 "종료_장소": f"{region} 차고지", "종료_km": end_km_n, "총주행거리(km)": drive_dist_n, 
-                "종료_배터리_차량": random.randint(10, 40), "날짜": end_date_str, 
-                "timestamp": end_ms_n, "특이사항": random.choice(["이상 없음", "취객 탑승", ""])
+                "종료_배터리_차량": str(random.randint(10, 40)), "날짜": end_date_str, 
+                "timestamp": ts_iso_end_n, "특이사항": random.choice(["이상 없음", "취객 탑승", ""])
             })
 
     return {
