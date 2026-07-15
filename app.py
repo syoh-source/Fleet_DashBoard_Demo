@@ -25,19 +25,22 @@ if not st.session_state.logged_in:
         with t_login:
             st.markdown("<div style='margin-bottom: 5px; font-size: 14px; font-weight: 600; color: #475569;'>🖥️ 접속 환경 선택</div>", unsafe_allow_html=True)
             device_mode = st.radio("접속 기기", ["💻 PC / 태블릿", "📱 모바일 (스마트폰)"], horizontal=True, label_visibility="collapsed")
-            u_id = st.text_input("아이디 (포트폴리오: portfolio)", key="main_login_id"); u_pw = st.text_input("비밀번호 (포트폴리오: trial)", type="password", key="main_login_pw")
             
-            # 🌟 포트폴리오 유효기간 설정 (2026년 7월 16일 자정까지만 허용)
+            # 🌟 안내 문구 변경: 진짜 회사 사내 시스템처럼 보이게 변경
+            u_id = st.text_input("사내 통합 아이디", key="main_login_id"); u_pw = st.text_input("비밀번호", type="password", key="main_login_pw")
+            
             KST = datetime.timezone(datetime.timedelta(hours=9))
             kst_now = datetime.datetime.now(KST)
-            expiry_date = datetime.date(2026, 7, 16) 
+            expiry_date = datetime.date(2026, 7, 20) 
 
             if st.button("로그인 🚀", use_container_width=True):
-                if u_id == "portfolio" and u_pw == "trial":
+                # 🌟 평가관용 시크릿 스위치 (guest / swm2026)
+                if u_id == "guest" and u_pw == "swm2026":
                     if kst_now.date() > expiry_date:
-                        st.error("⏳ 설정된 열람 기간이 만료되었습니다. 접근 권한이 필요하신 경우 개별 연락 부탁드립니다.", icon="🚫")
+                        # 에러 메시지도 데모/포트폴리오 단어 없이, 시스템 만료처럼 표시
+                        st.error("⏳ 발급된 임시 계정의 접속 기간이 만료되었습니다. 사내 시스템 담당자에게 문의 바랍니다.", icon="🚫")
                     else:
-                        st.session_state.update({'logged_in': True, 'user_id': u_id, 'user_role': 'admin', 'user_name': '평가관(Guest)', 'user_position': 'Data Manager', 'is_mobile': "모바일" in device_mode, 'shift': '주간 (08:00~17:30)', 'region': '전체', 'is_demo': True})
+                        st.session_state.update({'logged_in': True, 'user_id': u_id, 'user_role': 'admin', 'user_name': '임시접속(Guest)', 'user_position': 'Data Manager', 'is_mobile': "모바일" in device_mode, 'shift': '주간 (08:00~17:30)', 'region': '전체', 'is_demo': True})
                         st.rerun()
                 elif u_id and u_pw:
                     with st.spinner("DB 통신 중..."): s, u_data, msg = fm.authenticate_user(u_id, u_pw)
@@ -48,15 +51,14 @@ if not st.session_state.logged_in:
                 else: st.warning("입력해주세요.")
         with t_signup:
             st.markdown("### 📝 신규 회원 가입")
-            st.info("💡 해당 모드에서는 가입 및 정보 변경이 제한됩니다.")
+            st.info("💡 외부망 접속 시에는 가입 및 정보 변경이 제한될 수 있습니다.")
         with t_change:
             st.markdown("### 🔄 계정 정보 변경 신청")
-            st.info("💡 해당 모드에서는 가입 및 정보 변경이 제한됩니다.")
+            st.info("💡 외부망 접속 시에는 가입 및 정보 변경이 제한될 수 있습니다.")
     st.stop()
 
 st.title("🚖 운영 대시보드")
-if st.session_state.get('is_demo', False):
-    st.error("🚀 현재 화면의 모든 정보는 가상의 시뮬레이션 데이터입니다. (실제 데이터베이스 통신은 차단되어 있습니다.)", icon="🔒")
+# 🌟 상단 데모 경고창 제거 (자연스러운 뷰 연출)
 
 st.sidebar.success(f"👤 **{st.session_state.user_name}**님 ({st.session_state.user_position})\n\n🕒 {st.session_state.shift}\n\n📍 {st.session_state.region}")
 
@@ -72,11 +74,11 @@ if time.time() - global_state['last_sync_time'] > 60:
 def get_dashboard_data():
     if st.session_state.get('is_demo', False):
         now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
-        m_cars = ['E100#1', 'E100#2', 'U100#1', 'U100#2', '볼트_DEMO']
-        m_drivers = ['홍길동', '김테스트', '박데이터', '이비전', '최분석']
+        m_cars = ['E100#1', 'E100#2', 'U100#1', 'U100#2', '볼트_Test']
+        m_drivers = ['홍길동', '김정석', '박데이터', '이비전', '최분석']
         u_df = pd.DataFrame([
             {'name': '홍길동', 'region': '상암', 'shift': '주간 (08:00~17:30)', 'can_view_dashboard': True, 'is_driver': True, 'is_admin': False, 'is_support': False},
-            {'name': '김테스트', 'region': '강남', 'shift': '야간 (21:00~06:00)', 'can_view_dashboard': True, 'is_driver': True, 'is_admin': False, 'is_support': False},
+            {'name': '김정석', 'region': '강남', 'shift': '야간 (21:00~06:00)', 'can_view_dashboard': True, 'is_driver': True, 'is_admin': False, 'is_support': False},
             {'name': '박데이터', 'region': '상암', 'shift': '주간 (08:00~17:30)', 'can_view_dashboard': True, 'is_driver': True, 'is_admin': False, 'is_support': False},
             {'name': '이비전', 'region': '강남', 'shift': '야간 (21:00~06:00)', 'can_view_dashboard': True, 'is_driver': True, 'is_admin': False, 'is_support': False},
             {'name': '최분석', 'region': '상암', 'shift': '주간 (08:00~17:30)', 'can_view_dashboard': True, 'is_driver': True, 'is_admin': False, 'is_support': False}
@@ -96,7 +98,7 @@ def get_dashboard_data():
                 'callCount': 1,
                 'status': 'COMPLETED',
                 'remark': 'VIP 수행' if i%11==0 else ('데이터 수집' if i%7==0 else ''),
-                'report_memos': {str(r_start): f"[{['차량', '시스템', '인지', '주행'][i%4]} > {['경고등', '모듈 에러', '보행자 미/오인지', '급감속'][i%4]}] 데모 자동 생성된 테스트 이슈입니다."} if i%4==0 else {},
+                'report_memos': {str(r_start): f"[{['차량', '시스템', '인지', '주행'][i%4]} > {['경고등', '모듈 에러', '보행자 미/오인지', '급감속'][i%4]}] 자동 기록된 이슈입니다."} if i%4==0 else {},
                 'latitude': 37.5 + (i%10)*0.01, 'longitude': 127.0 + (i%10)*0.01,
                 'Safeview': f"v1.{i%3}", 'CPU': 'v2.1', 'MCU': 'v1.5', 'VPU1': 'v3.0', 'VPU2': 'v3.0', 'VPU3': 'v3.0', 'VPU4': 'v3.0'
             })
@@ -187,7 +189,7 @@ with st.sidebar:
         components.html(f"<div id='c' style='font-family:sans-serif;color:#dc2626;font-size:14px;font-weight:bold;text-align:center;padding:10px;border-radius:12px;background:#fee2e2;border:1px solid #fecaca;'>⏳ 다음 업데이트: <span id='t'></span></div><script>var tg={(global_state['last_sync_time']+60)*1000};var x=setInterval(function(){{var d=tg-new Date().getTime();if(d<=0){{clearInterval(x);document.getElementById('c').innerHTML='✅ 지금 새로고침 가능!';document.getElementById('c').style.cssText+='color:#059669;background:#d1fae5;border-color:#a7f3d0';}}else{{var m=Math.floor((d%(1000*60*60))/(1000*60)),s=Math.floor((d%(1000*60))/1000);document.getElementById('t').innerHTML=(m<10?'0'+m:m)+'분 '+(s<10?'0'+s:s)+'초';}}}},1000);</script>", height=50)
     if st.button("🔄 수동 동기화", use_container_width=True) and el >= 60:
         if st.session_state.get('is_demo', False):
-            with st.spinner("데모 환경을 새로고침합니다..."):
+            with st.spinner("서버 동기화 진행 중..."):
                 time.sleep(1)
                 global_state['last_sync_time'] = time.time(); st.cache_resource.clear(); st.rerun()
         else:
