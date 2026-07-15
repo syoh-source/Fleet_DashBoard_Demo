@@ -9,7 +9,7 @@ import numpy as np
 import ast
 import json
 from chart_utils import *
-from summary_modules import summary_trend, summary_time_stats, summary_data_table, summary_geo_analysis
+import summary_trend, summary_time_stats, summary_data_table, summary_geo_analysis
 
 CHUN_ANG_SERVICE_KEY = "wjBTMKih4/tIu0puLg/04/Sw7VSQsJbdmZgrXjwUtpJ44YrEEtXWXxjPCyla576KMKCkRLI5gtgFOIVcUlMzQg=="
 
