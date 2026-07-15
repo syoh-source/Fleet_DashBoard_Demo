@@ -110,7 +110,7 @@ def fetch_weather_block(r_name, nx, ny):
     except Exception as e:
         return f"<div style='flex: 1; min-width: 320px; padding: 20px; background: #fee2e2; border-radius: 20px; color: #ef4444; font-weight: 600;'>🚨 {r_name} 기상 응답 지연</div>"
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800, show_spinner="weather UI 로딩 중...")
 def get_toss_style_weather(target_region):
     regions = {"상암": (59, 127), "강남": (61, 125), "안양": (58, 121)}
     targets = regions.items() if target_region == "전체" else [(target_region, regions.get(target_region, (59, 127)))]
