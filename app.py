@@ -26,7 +26,7 @@ if not st.session_state.logged_in:
             st.markdown("<div style='margin-bottom: 5px; font-size: 14px; font-weight: 600; color: #475569;'>🖥️ 접속 환경 선택</div>", unsafe_allow_html=True)
             device_mode = st.radio("접속 기기", ["💻 PC / 태블릿", "📱 모바일 (스마트폰)"], horizontal=True, label_visibility="collapsed")
             
-            # 🌟 안내 문구 변경: 진짜 회사 사내 시스템처럼 보이게 변경
+            # UI는 진짜처럼 보이게, 입력값은 portfolio / trial 사용
             u_id = st.text_input("사내 통합 아이디", key="main_login_id"); u_pw = st.text_input("비밀번호", type="password", key="main_login_pw")
             
             KST = datetime.timezone(datetime.timedelta(hours=9))
@@ -34,11 +34,9 @@ if not st.session_state.logged_in:
             expiry_date = datetime.date(2026, 7, 20) 
 
             if st.button("로그인 🚀", use_container_width=True):
-                # 🌟 평가관용 시크릿 스위치 (guest / swm2026)
-                if u_id == "guest" and u_pw == "swm2026":
+                if u_id == "portfolio" and u_pw == "trial":
                     if kst_now.date() > expiry_date:
-                        # 에러 메시지도 데모/포트폴리오 단어 없이, 시스템 만료처럼 표시
-                        st.error("⏳ 발급된 임시 계정의 접속 기간이 만료되었습니다. 사내 시스템 담당자에게 문의 바랍니다.", icon="🚫")
+                        st.error("⏳ 임시 계정의 사용기간이 만료되었습니다.", icon="🚫")
                     else:
                         st.session_state.update({'logged_in': True, 'user_id': u_id, 'user_role': 'admin', 'user_name': '임시접속(Guest)', 'user_position': 'Data Manager', 'is_mobile': "모바일" in device_mode, 'shift': '주간 (08:00~17:30)', 'region': '전체', 'is_demo': True})
                         st.rerun()
@@ -58,7 +56,6 @@ if not st.session_state.logged_in:
     st.stop()
 
 st.title("🚖 운영 대시보드")
-# 🌟 상단 데모 경고창 제거 (자연스러운 뷰 연출)
 
 st.sidebar.success(f"👤 **{st.session_state.user_name}**님 ({st.session_state.user_position})\n\n🕒 {st.session_state.shift}\n\n📍 {st.session_state.region}")
 
