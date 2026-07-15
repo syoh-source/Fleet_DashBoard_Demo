@@ -20,10 +20,38 @@ def get_demo_data():
     u_df = pd.DataFrame(u_df_data)
     
     # 4. 운행기록/탑승정보 (df -> app.py에서 clean_df로 변환됨)
+    # KeyError 방지를 위해 밀리초(ms) 단위의 ride_start_time, ride_end_time 추가
     df_data = [
-        {"timestamp": "2026-07-20T11:30:00.000000+00:00", "carNumber": "E100#1", "driverName": "정재훈", "callCount": 1, "passengers": 2},
-        {"timestamp": "2026-07-20T14:20:00.000000+00:00", "carNumber": "E100#1", "driverName": "정재훈", "callCount": 1, "passengers": 1},
-        {"timestamp": "2026-07-21T13:00:00.000000+00:00", "carNumber": "E100#2", "driverName": "김준", "callCount": 2, "passengers": 3}
+        {
+            "timestamp": "2026-07-20T11:30:00.000000+00:00", 
+            "ride_start_time": 1784514600000, 
+            "ride_end_time": 1784515500000, # 15분간 탑승 
+            "carNumber": "E100#1", 
+            "driverName": "정재훈", 
+            "callCount": 1, 
+            "passengers": 2,
+            "status": "완료"
+        },
+        {
+            "timestamp": "2026-07-20T14:20:00.000000+00:00", 
+            "ride_start_time": 1784524800000, 
+            "ride_end_time": 1784526000000, # 20분간 탑승
+            "carNumber": "E100#1", 
+            "driverName": "정재훈", 
+            "callCount": 1, 
+            "passengers": 1,
+            "status": "완료"
+        },
+        {
+            "timestamp": "2026-07-21T13:00:00.000000+00:00", 
+            "ride_start_time": 1784606400000, 
+            "ride_end_time": 1784608200000, # 30분간 탑승
+            "carNumber": "E100#2", 
+            "driverName": "김준", 
+            "callCount": 2, 
+            "passengers": 3,
+            "status": "완료"
+        }
     ]
     df = pd.DataFrame(df_data)
     
