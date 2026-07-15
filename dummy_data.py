@@ -1,7 +1,7 @@
 import pandas as pd
 import datetime
 
-def generate_dummy_data():
+def get_demo_data():
     now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
     m_cars = ['E100#1', 'E100#2', 'U100#1', 'U100#2', '볼트_Test']
     m_drivers = ['홍길동', '김정석', '박데이터', '이비전', '최분석']
