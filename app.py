@@ -83,7 +83,7 @@ if not df.empty:
 else:
     df['duration_min'] = 0; df['revenue'] = 0; df['이슈건수'] = 0; df['chart_category'] = '기록없음'; df['hour'] = 0; df['time_bracket'] = '기타'; df['is_manual'] = '🚕 정상 운행'
 
-required_cols = {'출발자':'-', '종료자':'-', '출발_km':0, '종료_km':0, '총주행거리(km)':0, '특이사항':'-', '출발_배터리_차량':0, '종료_배터리_차량':0, '유형':'알수없음'}
+required_cols = {'출발_km':0, '종료_km':0, '총주행거리(km)':0, '특이사항':'-', '출발_배터리_차량':0, '종료_배터리_차량':0, '유형':'알수없음'}
 for col, val in required_cols.items():
     if col not in df_drive.columns: df_drive[col] = val
 
