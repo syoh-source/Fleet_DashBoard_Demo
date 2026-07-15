@@ -175,6 +175,17 @@ def draw_summary_tab(clean_df, df_drive_raw):
         dfe = dfe[[c for c in ['shift_date', '차량번호', 'shift_id', '종료자', '종료_시간', '종료_장소', '종료_km', '종료_배터리_차량', '종료_배터리_폰', '종료_배터리_앞탭', '종료_배터리_뒤탭', '총주행거리(km)', '특이사항'] if c in dfe.columns]].drop_duplicates(subset=['shift_date', '차량번호', 'shift_id'], keep='last')
         
         smg = pd.merge(dfs, dfe, on=['shift_date', '차량번호', 'shift_id'], how='outer')
+        
+        required_cols = [
+            '출발자', '종료자', '출발_시간', '종료_시간', '출발_장소', '종료_장소', 
+            '출발_km', '종료_km', '출발_배터리_차량', '출발_배터리_폰', '출발_배터리_앞탭', 
+            '출발_배터리_뒤탭', '종료_배터리_차량', '종료_배터리_폰', '종료_배터리_앞탭', 
+            '종료_배터리_뒤탭', '특이사항'
+        ]
+        for col in required_cols:
+            if col not in smg.columns:
+                smg[col] = pd.NA
+
         def g_hm(v):
             if pd.isna(v) or v in ['-', '']: return ''
             try: return datetime.datetime.fromtimestamp(float(v)/1000).strftime('%H:%M') if isinstance(v, (int, float)) or (isinstance(v, str) and str(v).replace('.', '').isdigit()) else pd.to_datetime(str(v), errors='coerce').strftime('%H:%M')
@@ -206,14 +217,10 @@ def draw_summary_tab(clean_df, df_drive_raw):
         dmg['총주행거리(km)'] = dmg['총주행거리(km)'].fillna(0)
         dmg['특이사항'] = dmg['특이사항'].fillna('')
 
-        # ==========================================
-        # [새롭게 추가된 운행시간 계산 로직]
-        # ==========================================
         def calc_duration(r):
             if pd.isna(r['출발_시간']) or pd.isna(r['종료_시간']):
                 return ""
             try:
-                # 출발_시간과 종료_시간을 안전하게 datetime으로 변환 후 시간 차이 계산
                 t_end = pd.to_datetime(r['종료_시간'], utc=True)
                 t_start = pd.to_datetime(r['출발_시간'], utc=True)
                 td = t_end - t_start
@@ -228,9 +235,7 @@ def draw_summary_tab(clean_df, df_drive_raw):
             except:
                 return ""
                 
-        # dmg 데이터프레임에 '운행시간' 컬럼 추가
         dmg['운행시간'] = dmg.apply(calc_duration, axis=1)
-        # ==========================================
 
     if not clean_df.empty:
         cdf = clean_df.copy()
@@ -279,7 +284,7 @@ def draw_summary_tab(clean_df, df_drive_raw):
                 if ap: return " / ".join(ap) + " (app)"
             elif isinstance(ms, list) and ms:
                 ap = [str(x) for x in ms if str(x).strip()]
-                if ap: return " / 대여 (app)" # list 형태면 임시 처리
+                if ap: return " / 대여 (app)" 
             return ""
             
         cdf['통합_이슈상세'] = cdf.apply(x_m, axis=1)
