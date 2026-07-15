@@ -3,7 +3,7 @@ import warnings; warnings.filterwarnings("ignore")
 import streamlit as st; import pandas as pd; import time; import datetime; import ast; import json; import streamlit.components.v1 as components
 import firebase_manager as fm; import chart_utils as dc; import admin_manager as am; import admin_utils as utils
 import tab_summary; import tab_safeguard; import tab_vehicle 
-import dummy_data
+import dummy_data  # 🌟 새롭게 분리한 데이터 생성 모듈 임포트
 
 class DummyAdm:
     def get_cached_raw_data(self): return [], [], []
@@ -69,11 +69,11 @@ if time.time() - global_state['last_sync_time'] > 60:
 
 @st.cache_resource(ttl=60)
 def get_dashboard_data():
-    # 🌟 데모 모드일 경우 분리된 파일에서 데이터 호출
+    # 🌟 데모 모드일 경우 분리된 모듈에서 데이터를 깔끔하게 가져옵니다.
     if st.session_state.get('is_demo', False):
-        return dummy_data.generate_dummy_data()
+        return dummy_data.get_demo_data()
 
-    # 🌟 일반 모드일 경우 실제 DB에서 데이터 호출
+    # 🌟 일반 모드일 경우 기존대로 실제 DB에서 데이터를 가져옵니다.
     _, m = fm.get_master_data()
     return {'m_cars': m.get('cars', []), 'm_drivers': m.get('drivers', []), 'u_df': pd.DataFrame(fm.get_all_users()), 'df': pd.DataFrame(fm.get_ride_logs()), 'df_drive': pd.DataFrame(fm.get_driving_logs()), 'sched_df': pd.DataFrame(fm.get_schedules() if fm.get_schedules() else [])}
 
@@ -112,8 +112,7 @@ if not df.empty:
 else: df = pd.DataFrame(columns=['timestamp_str', 'date_str', 'shift_date', 'dt_obj', 'carNumber', 'driverName', 'passengers', 'callCount', 'remark', 'status', 'region', 'shift'])
 
 
-# 🌟 무적의 컬럼 방어 (에러 원천 차단)
-# tab_summary.py 가 어떤 이름으로 찾더라도 무조건 빈칸이라도 존재하게 만듭니다.
+# 🌟 무적의 컬럼 방어막 유지 (어떤 환경에서도 에러 발생을 원천 차단)
 safety_cols = [
     'Safe_Guard', '차량번호', 'carNumber', '출발자', '종료자', '유형', 
     '출발_km', '종료_km', '총주행거리(km)', '주행거리', 
@@ -134,14 +133,12 @@ if not df_drive.empty:
     df_drive['dt_obj'] = df_drive.apply(p_dt, axis=1)
     df_drive['dt_obj'] = df_drive['dt_obj'].apply(lambda x: x.tz_localize('Asia/Seoul') if getattr(x, 'tz', None) is None else x.tz_convert('Asia/Seoul'))
     
-    # 누락된 데이터 억지로 채워넣기 (에러 방지)
     df_drive['Safe_Guard'] = df_drive['Safe_Guard'].astype(str).str.strip()
     df_drive['출발자'] = df_drive['출발자'].fillna(df_drive['Safe_Guard'])
     df_drive['종료자'] = df_drive['종료자'].fillna(df_drive['Safe_Guard'])
     df_drive['차량번호'] = df_drive['차량번호'].astype(str).str.strip()
     df_drive['carNumber'] = df_drive['차량번호']
     
-    # 동의어 컬럼 복제
     df_drive['주행거리'] = df_drive['주행거리'].fillna(df_drive['총주행거리(km)'])
     df_drive['출발_배터리'] = df_drive['출발_배터리'].fillna(df_drive['출발_배터리_차량'])
     df_drive['종료_배터리'] = df_drive['종료_배터리'].fillna(df_drive['종료_배터리_차량'])
@@ -160,7 +157,6 @@ if not df_drive.empty:
     df_drive['shift'] = df_drive['Safe_Guard'].map(lambda x: user_dict.get(x, {}).get('shift', '주간 (08:00~17:30)'))
     df_drive = df_drive.dropna(subset=['shift_date'])
 else:
-    # 🌟 텅 비어있을 때도 에러가 나지 않도록 빈 기둥(Column)들을 완벽하게 세워둠
     df_drive = pd.DataFrame(columns=['dt_obj', 'shift_date', '차량번호', 'carNumber', 'Safe_Guard', '출발자', '종료자', '유형', '출발_km', '종료_km', '출발_배터리_차량', '종료_배터리_차량', '총주행거리(km)', '특이사항', 'region', 'shift'])
 
 st.sidebar.header("⚙️ Infor."); st.sidebar.info("💡 1분 주기로 정보를 최신화합니다.")
