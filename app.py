@@ -161,17 +161,22 @@ if not df_drive.empty:
         
     df_drive['dt_obj'] = df_drive.apply(p_dt, axis=1)
     df_drive['dt_obj'] = df_drive['dt_obj'].apply(lambda x: x.tz_localize('Asia/Seoul') if getattr(x, 'tz', None) is None else x.tz_convert('Asia/Seoul'))
-    df_drive['Safe_Guard'] = df_drive.get('Safe_Guard', '').astype(str).str.strip()
     
-    # 🌟 완벽한 방어 코드: 어떤 상황에서도 출발자와 종료자 컬럼이 존재하도록 강제 생성
-    df_drive['출발자'] = df_drive.get('출발자', df_drive['Safe_Guard'])
-    df_drive['종료자'] = df_drive.get('종료자', df_drive['Safe_Guard'])
+    # 🌟 무적의 방어 코드: tab_summary가 필요로 하는 모든 컬럼을 강제 생성하여 KeyError 원천 차단
+    required_cols = ['Safe_Guard', '차량번호', '출발자', '종료자', '유형', '출발_km', '종료_km', '출발_배터리_차량', '종료_배터리_차량', '총주행거리(km)', '특이사항']
+    for col in required_cols:
+        if col not in df_drive.columns:
+            df_drive[col] = None
+
+    df_drive['Safe_Guard'] = df_drive['Safe_Guard'].astype(str).str.strip()
+    df_drive['출발자'] = df_drive['출발자'].fillna(df_drive['Safe_Guard'])
+    df_drive['종료자'] = df_drive['종료자'].fillna(df_drive['Safe_Guard'])
     
-    df_drive['차량번호'] = df_drive.get('차량번호', '').astype(str).str.strip()
+    df_drive['차량번호'] = df_drive['차량번호'].astype(str).str.strip()
     df_drive['carNumber'] = df_drive['차량번호']
     
     df_drive = df_drive.sort_values(['차량번호', 'dt_obj']).reset_index(drop=True)
-    df_drive['is_start'] = df_drive.get('유형', '').astype(str).str.replace(' ', '').str.strip().isin(['출발', '시작', '출근'])
+    df_drive['is_start'] = df_drive['유형'].astype(str).str.replace(' ', '').str.strip().isin(['출발', '시작', '출근'])
     df_drive['shift_id'] = df_drive.groupby('차량번호')['is_start'].cumsum()
     
     s_map = df_drive[df_drive['is_start']].groupby(['차량번호', 'shift_id'])['dt_obj'].first().to_dict()
@@ -182,6 +187,9 @@ if not df_drive.empty:
     df_drive['region'] = df_drive['Safe_Guard'].map(lambda x: user_dict.get(x, {}).get('region', '미정'))
     df_drive['shift'] = df_drive['Safe_Guard'].map(lambda x: user_dict.get(x, {}).get('shift', '주간 (08:00~17:30)'))
     df_drive = df_drive.dropna(subset=['shift_date'])
+else:
+    # 🌟 텅 비어있을 때도 에러가 나지 않도록 빈 기둥(Column)들을 완벽하게 세워둠
+    df_drive = pd.DataFrame(columns=['dt_obj', 'shift_date', '차량번호', 'carNumber', 'Safe_Guard', '출발자', '종료자', '유형', '출발_km', '종료_km', '출발_배터리_차량', '종료_배터리_차량', '총주행거리(km)', '특이사항', 'region', 'shift'])
 
 st.sidebar.header("⚙️ Infor."); st.sidebar.info("💡 1분 주기로 정보를 최신화합니다.")
 el = time.time() - global_state['last_sync_time']
