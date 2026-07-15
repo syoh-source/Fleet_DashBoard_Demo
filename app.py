@@ -73,27 +73,37 @@ if not df.empty:
     df['shift'] = df['driverName'].map(lambda x: user_dict.get(x, {}).get('shift', '주간 (08:00~17:30)'))
 else: df = pd.DataFrame(columns=['timestamp_str', 'date_str', 'shift_date', 'dt_obj', 'carNumber', 'driverName', 'passengers', 'callCount', 'remark', 'status', 'region', 'shift'])
 
-df_drive['차량번호'] = df_drive.get('차량번호', df_drive.get('carNumber', '')).astype(str).str.strip()
-if 'shift_date' not in df_drive.columns: df_drive['shift_date'] = None
-if 'shift_id' not in df_drive.columns: df_drive['shift_id'] = 1
+# 🌟 [강제 보정] 필수 통계 컬럼이 없으면 0으로라도 생성 (에러 원천 차단)
+if not df.empty:
+    df['duration_min'] = ((pd.to_datetime(df['ride_end_time'], unit='ms', errors='coerce') - pd.to_datetime(df['ride_start_time'], unit='ms', errors='coerce')).dt.total_seconds() / 60).fillna(0)
+    df['revenue'] = df.apply(dc.calc_revenue, axis=1)
+    df['이슈건수'] = df.apply(dc.get_global_issue_count, axis=1)
+    df['chart_category'] = df.apply(dc.classify_data, axis=1)
+    df['hour'] = df['dt_obj'].dt.hour
+    df['time_bracket'] = df['hour'].apply(dc.get_time_bracket)
+    df['is_manual'] = df['chart_category'].apply(lambda x: '📦 일괄 입력' if '일괄' in x else '🚕 정상 운행')
+else:
+    df['duration_min'] = 0; df['revenue'] = 0; df['이슈건수'] = 0; df['chart_category'] = '기록없음'; df['hour'] = 0; df['time_bracket'] = '기타'; df['is_manual'] = '🚕 정상 운행'
 
-required_cols = ['출발자', '종료자', '출발_km', '종료_km', '총주행거리(km)', '특이사항', '출발_배터리_차량', '종료_배터리_차량', '출발_배터리_폰', '종료_배터리_폰', '출발_배터리_앞탭', '종료_배터리_앞탭', '출발_배터리_뒤탭', '종료_배터리_뒤탭', '출발_장소', '종료_장소']
-for col in required_cols:
-    if col not in df_drive.columns: df_drive[col] = '-'
+# 🌟 f_drive도 동일하게 무적 방어
+required_cols = {'출발자':'-', '종료자':'-', '출발_km':0, '종료_km':0, '총주행거리(km)':0, '특이사항':'-', '출발_배터리_차량':0, '종료_배터리_차량':0, '유형':'알수없음'}
+for col, val in required_cols.items():
+    if col not in df_drive.columns: df_drive[col] = val
 
 f_drive = df_drive.copy()
+clean_df = df.copy()
 
+# 사이드바/탭 로직
 el = time.time() - global_state['last_sync_time']
 with st.sidebar:
     if st.button("🔄 수동 동기화", use_container_width=True): st.rerun()
-    # ... (기존 sidebar 로직) ...
 
 t_titles = ["📊 통합 Summary", "🧑‍✈️ Safe Guard 별", "🚗 차량 별"]
 if st.session_state.user_role in ['admin', 'DM']: t_titles.append("⚙️ 시스템 관리")
 tbs = st.tabs(t_titles)
 
-with tbs[0]: tab_summary.draw_summary_tab(df, f_drive)
-with tbs[1]: tab_safeguard.draw_safeguard_tab(df, f_drive, sched_df)
-with tbs[2]: tab_vehicle.draw_car_tab(df, f_drive) 
+with tbs[0]: tab_summary.draw_summary_tab(clean_df, f_drive)
+with tbs[1]: tab_safeguard.draw_safeguard_tab(clean_df, f_drive, sched_df)
+with tbs[2]: tab_vehicle.draw_car_tab(clean_df, f_drive) 
 if st.session_state.user_role in ['admin', 'DM']:
-    with tbs[3]: am.draw_admin_tab(df, f_drive, u_df, sched_df, m_cars, m_drivers, datetime.datetime.now())
+    with tbs[3]: am.draw_admin_tab(clean_df, f_drive, u_df, sched_df, m_cars, m_drivers, datetime.datetime.now())
