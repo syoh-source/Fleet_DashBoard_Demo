@@ -136,9 +136,29 @@ def get_toss_style_weather(target_region):
 def draw_summary_tab(clean_df, df_drive_raw):
     mbl = st.session_state.get('is_mobile', False)
     
-    # ⛅ [날씨 배너 복구 완료] 사용자 접속 지역 기준 날씨 표출
-    weather_region = st.session_state.get("region", "전체")
-    st.markdown(get_toss_style_weather(weather_region), unsafe_allow_html=True)
+    # ======== 1. 날씨 위젯 표출 ========
+    view_region = st.session_state.get("view_region", "전체")
+    weather_html = get_toss_style_weather(view_region)
+    st.markdown(weather_html, unsafe_allow_html=True)
+    
+    # ======== 2. KPI 카드 표출 ========
+    if not clean_df.empty:
+        t_calls = int(clean_df['callCount'].sum())
+        t_pass = int(clean_df['passengers'].sum())
+        t_rev = int(clean_df.get('revenue', pd.Series([0])).sum())
+        t_cars = int(clean_df['carNumber'].nunique())
+        t_issues = int(clean_df.get('이슈건수', pd.Series([0])).sum())
+    else:
+        t_calls = t_pass = t_rev = t_cars = t_issues = 0
+
+    st.markdown("### 📈 전체 운영 성과 요약")
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("총 호출 수", f"{t_calls:,} 건")
+    c2.metric("총 탑승객 수", f"{t_pass:,} 명")
+    c3.metric("예상 수입금", f"{t_rev:,} 원")
+    c4.metric("운영 차량", f"{t_cars} 대")
+    c5.metric("이슈 발생", f"{t_issues} 건")
+    st.divider()
     
     if "init_call_id_done" not in st.session_state:
         r_id = st.query_params.get("call_id", st.session_state.get("saved_call_id", None))
@@ -180,6 +200,7 @@ def draw_summary_tab(clean_df, df_drive_raw):
         
         smg = pd.merge(dfs, dfe, on=['shift_date', '차량번호', 'shift_id'], how='outer')
         
+        # 에러 방지용 누락 컬럼 강제 생성
         required_cols = [
             '출발자', '종료자', '출발_시간', '종료_시간', '출발_장소', '종료_장소', 
             '출발_km', '종료_km', '출발_배터리_차량', '출발_배터리_폰', '출발_배터리_앞탭', 
@@ -225,8 +246,17 @@ def draw_summary_tab(clean_df, df_drive_raw):
             if pd.isna(r['출발_시간']) or pd.isna(r['종료_시간']):
                 return ""
             try:
-                t_end = pd.to_datetime(r['종료_시간'], utc=True)
-                t_start = pd.to_datetime(r['출발_시간'], utc=True)
+                # 숫자형 타임스탬프 처리 지원을 위해 to_datetime에 unit 설정 유연화 필요 없음 (g_hm처럼 텍스트로 안넘어올수있으므로 안전하게)
+                if isinstance(r['종료_시간'], (int, float)) or (isinstance(r['종료_시간'], str) and r['종료_시간'].isdigit()):
+                     t_end = pd.to_datetime(float(r['종료_시간']), unit='ms', utc=True)
+                else:
+                     t_end = pd.to_datetime(r['종료_시간'], utc=True)
+                     
+                if isinstance(r['출발_시간'], (int, float)) or (isinstance(r['출발_시간'], str) and r['출발_시간'].isdigit()):
+                     t_start = pd.to_datetime(float(r['출발_시간']), unit='ms', utc=True)
+                else:
+                     t_start = pd.to_datetime(r['출발_시간'], utc=True)
+                     
                 td = t_end - t_start
                 total_seconds = int(td.total_seconds())
                 
@@ -241,6 +271,7 @@ def draw_summary_tab(clean_df, df_drive_raw):
                 
         dmg['운행시간'] = dmg.apply(calc_duration, axis=1)
 
+    # ======== 3. 달력 주야간 분리 및 정렬 ========
     if not clean_df.empty:
         cdf = clean_df.copy()
         def safe_dt_parse(v):
@@ -254,6 +285,18 @@ def draw_summary_tab(clean_df, df_drive_raw):
         cdf['carNumber'] = cdf['carNumber'].replace(['nan', 'None', ''], '알수없음')
         cdf['driverName'] = cdf.get('driverName', cdf.get('운전자', '알수없음')).fillna('알수없음')
         cdf['driverName'] = cdf['driverName'].replace(['nan', 'None', ''], '알수없음')
+        
+        # 달력 주/야간 그룹핑 생성
+        cdf['hour'] = cdf['dt_obj'].dt.hour
+        cdf['is_night'] = cdf['hour'].apply(lambda h: True if pd.notna(h) and (h >= 18 or h < 6) else False)
+        cdf['shift_icon'] = cdf['is_night'].map({False: "☀️ 주간", True: "🌙 야간"})
+        
+        # 캘린더에 표시될 텍스트 (주간/야간 태그 + 차량번호)
+        cdf['calendar_text'] = cdf['shift_icon'] + " | " + cdf['carNumber']
+        
+        # 주간이 위로, 야간이 아래로 오도록 + 그 안에서 차량번호 순으로 정렬
+        cdf = cdf.sort_values(by=['is_night', 'carNumber'], ascending=[True, True])
+        
         cdf['callCount'] = pd.to_numeric(cdf.get('callCount', 0), errors='coerce').fillna(0)
         cdf['passengers'] = pd.to_numeric(cdf.get('passengers', 0), errors='coerce').fillna(0)
         cdf['shift_date'] = cdf['dt_obj'].apply(lambda d: (d - datetime.timedelta(days=1)).date() if pd.notna(d) and d.hour < 6 else (d.date() if pd.notna(d) else None))
@@ -273,7 +316,6 @@ def draw_summary_tab(clean_df, df_drive_raw):
         if 'issue_pings' in cdf.columns: cdf['issue_pings'] = cdf['issue_pings'].apply(r_js)
         
         cdf['chart_category'] = cdf.apply(classify_data, axis=1)
-        cdf['hour'] = cdf['dt_obj'].dt.hour
         cdf['time_bracket'] = cdf['hour'].apply(get_time_bracket)
         cdf['is_manual'] = cdf['chart_category'].apply(lambda x: '📦 일괄 입력' if '일괄' in x else '🚕 정상 운행')
         cdf['revenue'] = cdf.apply(calc_revenue, axis=1)
@@ -288,32 +330,11 @@ def draw_summary_tab(clean_df, df_drive_raw):
                 if ap: return " / ".join(ap) + " (app)"
             elif isinstance(ms, list) and ms:
                 ap = [str(x) for x in ms if str(x).strip()]
-                if ap: return " / 대여 (app)" 
+                if ap: return " / 대여 (app)"
             return ""
             
         cdf['통합_이슈상세'] = cdf.apply(x_m, axis=1)
-        cdf['calendar_text'] = cdf['carNumber']
         
-        if not drv.empty and not smg.empty:
-            ds = drv[drv['is_start']][['차량번호', 'dt_obj', 'shift_id']].dropna(subset=['dt_obj']).copy().rename(columns={'차량번호': 'carNumber'})
-            if not ds.empty:
-                ds['carNumber'] = ds['carNumber'].astype(str).str.strip()
-                ds['dt_obj_merge'] = ds['dt_obj'].dt.tz_localize(None).astype('datetime64[ns]')
-                ds = ds.dropna(subset=['dt_obj_merge']).sort_values('dt_obj_merge')
-                
-                cs = cdf.dropna(subset=['dt_obj']).copy()
-                cs['carNumber'] = cs['carNumber'].astype(str).str.strip()
-                cs['dt_obj_merge'] = cs['dt_obj'].dt.tz_localize(None).astype('datetime64[ns]')
-                cs = cs.dropna(subset=['dt_obj_merge']).sort_values('dt_obj_merge')
-                
-                if not cs.empty:
-                    cm = pd.merge_asof(cs, ds, on='dt_obj_merge', by='carNumber', direction='backward')
-                    st_m = smg[['차량번호', 'shift_id', 'calendar_text']].rename(columns={'차량번호': 'carNumber'}).drop_duplicates()
-                    st_m['carNumber'] = st_m['carNumber'].astype(str).str.strip()
-                    if 'calendar_text' in cm.columns: cm = cm.drop(columns=['calendar_text'])
-                    cm = pd.merge(cm, st_m, on=['carNumber', 'shift_id'], how='left')
-                    cm.set_index(cs.index, inplace=True)
-                    cdf.loc[cs.index, 'calendar_text'] = cm['calendar_text'].fillna(cm['carNumber'])
         clean_df = cdf
     else:
         clean_df = pd.DataFrame(columns=['timestamp_str', 'date_str', 'dt_obj', 'carNumber', 'driverName', 'passengers', 'callCount', 'remark', 'status', 'calendar_text', 'chart_category', 'hour', 'time_bracket', 'is_manual', 'revenue', '이슈건수', '통합_이슈상세', 'shift_date'])
